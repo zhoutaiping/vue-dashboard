@@ -21,3 +21,6 @@ selenium-debug.log
 
 package-lock.json
 yarn.lock
+
+# WorkBuddy 本地修复用的 npm 缓存与脚本
+.npm-cache/
