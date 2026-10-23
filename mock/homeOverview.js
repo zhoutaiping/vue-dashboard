@@ -240,9 +240,14 @@ module.exports = [
         percentage: totalCount ? ((item.projectCount / totalCount) * 100).toFixed(2) : '0'
       }))
 
+      // 行业筛选：指标按所选行业占比缩小（模拟后端按 industry 过滤）
+      const industryRatio = industry && industry !== '全部'
+        ? ((industryCounts.find(i => i.industry === industry) || { projectCount: 0 }).projectCount / totalCount)
+        : 1
+
       return ok({
-        constructionCount: Math.round(6220 * ratio * (status === '2' ? 0.2 : 1)),
-        operationCount: Math.round(220 * ratio * (status === '1' ? 0.2 : 1)),
+        constructionCount: Math.round(6220 * ratio * industryRatio * (status === '2' ? 0.2 : 1)),
+        operationCount: Math.round(220 * ratio * industryRatio * (status === '1' ? 0.2 : 1)),
         industryNum: [
           { industry: '全部', projectCount: String(allCount), percentage: '100' }
         ].concat(withPercent(industryCounts).map(item => Object.assign({}, item, {
