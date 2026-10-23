@@ -516,7 +516,8 @@ export default {
       const min = hasColor ? Math.min(...values) : 0
       const max = hasColor ? Math.max(...values) : 0
       // 全屏时左右浮层消失，图例贴边；否则对齐左侧浮层右缘（12 + 465 + 12）
-      const legendLeft = this.isFullscreen ? 12 : 489
+      // 全屏后左右浮层仍在（全屏作用于页面容器），图例保持对齐左侧浮层右缘：12 + 465 + 12
+      const legendLeft = 489
 
       const option = {
         tooltip: {
@@ -728,10 +729,12 @@ export default {
     toggleFullscreen() {
       this.setFullscreen(!this.isFullscreen)
     },
+    // 全屏作用于「整个页面」容器（首页总览根节点），页面上的左右面板、工具栏等功能保持可见；
+    // 之前对地图容器自身全屏，会让页面其余功能被全屏元素遮盖
     setFullscreen(flag) {
-      const el = this.$refs.wrap
-      if (!el) return
+      const pageRoot = (this.$el && this.$el.closest && this.$el.closest('.home-overview')) || null
       if (flag) {
+        const el = pageRoot || document.documentElement
         el.requestFullscreen ? el.requestFullscreen() : null
       } else {
         document.exitFullscreen ? document.exitFullscreen() : null
@@ -778,33 +781,6 @@ export default {
   &__canvas {
     width: 100%;
     height: 100%;
-  }
-
-  /* 全屏状态下铺满屏幕；父级左右浮层不再存在，浮层偏移复位到贴边 */
-  &:fullscreen {
-    width: 100vw;
-    height: 100vh;
-
-    .echarts-china-map__canvas {
-      width: 100%;
-      height: 100%;
-    }
-
-    .echarts-china-map__panel--build {
-      top: 60px;
-      right: 12px;
-    }
-
-    .echarts-china-map__panel--subsidy {
-      right: 12px;
-      border-radius: 8px;
-    }
-
-    /* 全屏时 visualMap 复位到 left:12，电价菜单排在其右侧 */
-    .echarts-china-map__panel--legend {
-      left: 68px;
-      border-radius: 8px;
-    }
   }
 
   &__fullscreen {

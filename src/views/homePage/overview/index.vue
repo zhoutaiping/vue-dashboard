@@ -827,6 +827,12 @@ export default {
   box-sizing: border-box;
   overflow: hidden;
 
+  /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
+  &:fullscreen {
+    height: 100vh;
+    padding: 0;
+  }
+
   &__body {
     position: relative;
     flex: 1;
