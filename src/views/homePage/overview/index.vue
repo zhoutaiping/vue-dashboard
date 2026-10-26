@@ -40,7 +40,8 @@
           <CategoryTabs
             :items="categoryTabs"
             :field-map="CATEGORY_FIELD_MAP"
-            :value="query.category"
+            :value="categorySelection"
+            multiple
             @input="handleCategoryChange"
           />
         </div>
@@ -186,6 +187,9 @@ import {
   DRILL_REGION_AS_PROVINCE_NAME,
   toCoordNumber,
   cityRegionName,
+  REGION_SPLIT,
+  regionProvinceShort,
+  splitProvinceByCityName,
   PROVINCE_CAPITALS,
   station_type,
   fullscreenIcon
@@ -263,9 +267,15 @@ export default {
     }
   },
   computed: {
-    // 单选分类 → 刷新键组成部分：'all' = 全部，其它为行业 id
+    // 多选分类 → 刷新键组成部分：空数组 = 全部（'all'），否则逗号拼接的 id 串
     categoryParam() {
-      return this.query.category || 'all'
+      return (this.query.categories || []).join(',') || 'all'
+    },
+    // tabs 选中态：空数组（= 全部）映射为全选 id 列表，使「全部」项高亮
+    categorySelection() {
+      const sel = this.query.categories || []
+      if (sel.length) return sel
+      return (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
     },
     // 报表刷新键：影响全部报表接口入参的条件（月份/行业/状态/下钻层级/区域）
     // 用于替代 query 深监听，避免无关字段（如排名维度）触发全量请求
@@ -318,12 +328,15 @@ export default {
         rankingType: this.query.rankType
       })
     },
-    // 单选行业 → 接口 industry 参数：全部传空字符串，具体行业传行业名
+    // 多选行业 → 接口 industry 参数：全部（空数组）传空数组串 "[]"；选中项按行业名以 JSON 数组串传，如 ["能源电力","其他"]
     industryParam() {
-      const id = this.query.category
-      if (!id || id === 'all') return ''
-      const cat = CATEGORIES.find(c => c.id === id)
-      return cat ? cat.name : id
+      const sel = this.query.categories || []
+      if (!sel.length) return []
+      const names = sel.map(id => {
+        const cat = CATEGORIES.find(c => c.id === id)
+        return cat ? cat.name : id
+      })
+      return names
     },
     // 地图状态筛选（在建/运营多选）→ 接口 status 枚举
     statusParam() {
@@ -667,7 +680,7 @@ export default {
     async fetchIndustryStats(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview({
         ...this.reportParams,
-        industry: ''
+        industry: []
       }), {})
       if (this.isStale(seq)) return
       // 行业 tabs 计数独立保存：分类全部取消选中时页面数据清空，但筛选器需保留供重新选择
@@ -747,8 +760,12 @@ export default {
       }
       return []
     },
-    handleCategoryChange(value) {
-      this.query.category = value
+    // 行业多选变更：选中全部真实分类时规范化为空数组（= 全部，industry 传空）
+    handleCategoryChange(next) {
+      const list = Array.isArray(next) ? next : []
+      const realIds = (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
+      const isAll = realIds.length > 0 && realIds.every(id => list.includes(id))
+      this.query.categories = isAll ? [] : list
     },
     // 运营项目情况卡片右上角能源类型切换（风电/光伏/非标）
     // 只改 operateEnergyType（独立状态），由其 watch 触发重新请求，不与建设/运营管理报表联动
@@ -875,7 +892,8 @@ export default {
     handlePieClick(params) {
       const target = CATEGORIES.find(c => c.name === params.name)
       if (target) {
-        this.query.category = target.id
+        // 饼图点击 → 仅选中该行业（多选语义下等价单选）
+        this.query.categories = [target.id]
       }
     },
     // 点位点击：详情卡片由地图组件弹出，此处请求项目详情接口并回传给卡片

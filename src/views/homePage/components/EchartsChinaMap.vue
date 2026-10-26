@@ -111,7 +111,7 @@ import * as echarts from 'echarts'
 import chinaJson from '@/assets/maps/china-region.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
-import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
+import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue, cityRegionName } from '../overview/config'
 import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
@@ -290,6 +290,9 @@ export default {
   },
   mounted() {
     this.initChart()
+    // 全国地图分区化（异步）：接口已按业务分区（蒙西/蒙东、冀北/河北南网）返回内蒙古/河北数据，
+    // 全国图需把这两省替换为地市级区域才能体现分区着色；完成后重绘
+    this.ensureSplitChinaMap().then(ok => { if (ok) this.renderOption() })
   },
   beforeDestroy() {
     this.unbindWrapEvents()
@@ -305,33 +308,33 @@ export default {
     // 在各自投影下算出的 center 有微小差异，会随缩放累积放大导致底座漂移。
     // 直接对齐绝对值可保证任意层级下两层严格重合，屏幕间距恒等于 layoutCenter 偏移。
     // 全程只读模型/坐标系，不走 getOption + setOption（避免深拷贝与全量更新造成的卡顿）。
-    
+
     initChart() {
       this.chart = echarts.init(this.$refs.chart)
       this.renderOption()
       this.chart.on('click', this.handleClick)
       // 主图缩放/平移时同步灰色底座：微任务中执行，与主图在同一帧重绘，视觉上完全同步
-      this.chart.on("georoam", (params) => {
+      this.chart.on('georoam', (params) => {
         // 只处理主地图的缩放、拖动事件，避免底座事件重复转发
-        if (!params || params.geoId !== "mapMain") return;
+        if (!params || params.geoId !== 'mapMain') return
 
         const action = {
-          type: "geoRoam",
-          componentType: "geo",
-          geoId: "mapShadow",
+          type: 'geoRoam',
+          componentType: 'geo',
+          geoId: 'mapShadow',
           dx: params.dx || 0,
-          dy: params.dy || 0,
-        };
+          dy: params.dy || 0
+        }
 
         // 只有缩放事件才携带 zoom，避免把未定义的值传进去
         if (params.zoom != null) {
-          action.zoom = params.zoom;
-          action.originX = params.originX;
-          action.originY = params.originY;
+          action.zoom = params.zoom
+          action.originX = params.originX
+          action.originY = params.originY
         }
 
-        this.chart.dispatchAction(action);
-      });
+        this.chart.dispatchAction(action)
+      })
       // 悬浮省份/市区时在鼠标处显示 province 图标（原型效果）；指向点位或移出地图时隐藏
       // 注意：区域命中的事件归属是绑定了 geoIndex 的 map series（componentType='series'、
       // componentSubType='map'），并非 'geo'，因此两种来源都要覆盖
@@ -346,37 +349,57 @@ export default {
           this.hoverIcon = ''
         }
       })
+      // 画布级 mousemove 兜底：chart.on('mousemove') 是命中代理事件，只在悬停到省份/点位上
+      // 才派发；鼠标移到画布空白处（无命中元素）时不会触发上面的 else 清理分支，
+      // 图标会残留在最后悬浮的省份位置。zrender 原生事件始终派发，无命中元素即清除
+      this.chart.getZr().on('mousemove', e => {
+        if (!e.target && this.hoverIcon) this.hoverIcon = ''
+      })
       this.chart.on('globalout', () => {
         this.hoverIcon = ''
       })
       this.bindFullscreen()
-      // 全局兜底（捕获阶段）：鼠标跟随图标只在指针位于本地图画布上时展示。
+      // 全局兜底（捕获阶段）：鼠标跟随图标只在指针位于本地图画布上时展示；
+      // 点位弹窗在指针离开整个地图容器时关闭（弹窗本身在容器内，可正常交互）
       // zrender 的 mousemove/globalout 在「移到 DOM 覆盖层（菜单/面板/卡片）」「快速移出窗口」
-      // 「页面滚动」等场景下不再派发，图标会残留在最后悬浮的省份上，这里统一兜底隐藏
+      // 「页面滚动」等场景下不再派发，图标/弹窗会残留，这里统一兜底清理
       this._onDocMove = e => {
-        if (!this.hoverIcon) return
         const t = e.target
         const wrap = this.$refs.wrap
         const onCanvas = !!(t && t.tagName === 'CANVAS' && wrap && wrap.contains(t))
-        if (!onCanvas) this.hoverIcon = ''
+        if (!onCanvas && this.hoverIcon) this.hoverIcon = ''
+        // 弹窗关闭判定：是否还在地图容器内（含容器内的浮层/卡片）
+        const insideWrap = !!(wrap && (wrap === t || (t && wrap.contains(t))))
+        if (!insideWrap && this.activePoint) this.activePoint = null
       }
       // 移出浏览器窗口：mouseout 且 relatedTarget 为空
       this._onDocOut = e => {
-        if (!this.hoverIcon) return
-        if (!e.relatedTarget && !e.toElement) this.hoverIcon = ''
+        if (!e.relatedTarget && !e.toElement) {
+          if (this.hoverIcon) this.hoverIcon = ''
+          if (this.activePoint) this.activePoint = null
+        }
       }
-      // 页面滚动：指针相对地图位置变化，直接隐藏
+      // 页面滚动：指针相对地图位置变化（弹窗定位坐标失效），直接清理
       this._onAnyScroll = () => {
         if (this.hoverIcon) this.hoverIcon = ''
+        if (this.activePoint) this.activePoint = null
       }
       document.addEventListener('mousemove', this._onDocMove, true)
       document.addEventListener('mouseout', this._onDocOut, true)
       window.addEventListener('scroll', this._onAnyScroll, true)
       window.addEventListener('blur', this._onAnyScroll)
+      // 容器 mouseleave 直连兜底：zrender 事件被 DOM 覆盖层拦截时仍能触发
+      this._onMapLeave = () => {
+        if (this.hoverIcon) this.hoverIcon = ''
+        if (this.activePoint) this.activePoint = null
+      }
+      if (this.$refs.wrap) this.$refs.wrap.addEventListener('mouseleave', this._onMapLeave)
     },
     // 解绑全局兜底事件（与 initChart 内绑定成对）
     unbindWrapEvents() {
       if (this._onDocMove) document.removeEventListener('mousemove', this._onDocMove, true)
+      if (this.$refs.wrap && this._onMapLeave) this.$refs.wrap.removeEventListener('mouseleave', this._onMapLeave)
+      this._onMapLeave = null
       if (this._onDocOut) document.removeEventListener('mouseout', this._onDocOut, true)
       if (this._onAnyScroll) {
         window.removeEventListener('scroll', this._onAnyScroll, true)
@@ -539,7 +562,7 @@ export default {
           // 悬浮时省份名保持显示（透明绿底上深色文字）
           label: { show: true, color: '#1a5c1a', fontWeight: 600 }
         },
-        data: hasColor ? this.provinceData : []
+        data: hasColor ? this.expandSplitRegions(this.provinceData) : []
       }
     },
     renderOption() {
@@ -583,7 +606,7 @@ export default {
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
             // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
             if (params.seriesType === 'map' || params.componentType === 'geo') {
-              const data = this.regionTooltipData[params.name]
+              const data = this.regionTooltipData[params.name] || this.matchRegionData(params.name)
               const selected = this.priceOptions.find(o => o.id === this.priceType)
               const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
               const list = selected ? base.filter(item => item.field === selected.field) : base
