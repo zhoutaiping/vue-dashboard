@@ -215,7 +215,10 @@ export default {
           {
             type: 'value',
             name: this.yAxisNames[0] || '',
-            nameTextStyle: { color: '#909399', fontSize: 11 },
+            // 轴名默认居中于轴顶，窄容器下左半截会被裁掉（只剩"/kWh"）；
+            // 改为左对齐锚定轴顶向右延伸，保证完整落在容器内
+            nameTextStyle: { color: '#909399', fontSize: 11, align: 'left' },
+            nameGap: 10,
             axisLine: { show: false },
             axisTick: { show: false },
             splitLine: { lineStyle: { color: '#e8ebf0', type: 'dashed' }},
@@ -224,7 +227,9 @@ export default {
           {
             type: 'value',
             name: this.yAxisNames[1] || '',
-            nameTextStyle: { color: '#909399', fontSize: 11 },
+            // 右轴镜像：右对齐锚定轴顶向左延伸，避免超出右缘
+            nameTextStyle: { color: '#909399', fontSize: 11, align: 'right' },
+            nameGap: 10,
             show: hasSecondAxis,
             axisLine: { show: false },
             axisTick: { show: false },

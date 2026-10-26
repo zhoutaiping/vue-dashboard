@@ -605,13 +605,21 @@ export default {
       return seq !== this.reqSeq
     },
     // 项目总览报表：POST queryProjectOverview，入参 = 全局报表参数
+    // 项目总览：POST queryProjectOverview，入参 = 全局报表参数（含选中的行业）
+    // 指标（建设项目/运营期项目）按选中行业过滤；行业分布由 fetchIndustryStats 单独取全量
     async fetchOverview(seq = this.nextSeq()) {
+      const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
+      if (this.isStale(seq)) return
+      this.overview = data || {}
+    },
+    // 行业分布（顶部 tabs 计数 + 项目总览饼图）：同一接口但不传行业，
+    // 保证切换行业时始终显示全部行业的分布，不被所选行业过滤
+    async fetchIndustryStats(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview({
         ...this.reportParams,
         industry: ''
       }), {})
       if (this.isStale(seq)) return
-      this.overview = data || {}
       // 行业 tabs 计数独立保存：分类全部取消选中时页面数据清空，但筛选器需保留供重新选择
       if (data && Array.isArray(data.industryNum) && data.industryNum.length) {
         this.categoryStats = data.industryNum
@@ -659,6 +667,7 @@ export default {
       // 前 5 个请求各自写回自己的 data，这里只做并发编排，不依赖返回值
       await Promise.all([
         this.fetchOverview(seq),
+        this.fetchIndustryStats(seq),
         this.fetchManageTrend(seq),
         this.fetchOperateDetail(seq),
         this.fetchRank(seq),
@@ -817,6 +826,12 @@ export default {
   background: #f0f2f5;
   box-sizing: border-box;
   overflow: hidden;
+
+  /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
+  &:fullscreen {
+    height: 100vh;
+    padding: 0;
+  }
 
   &__body {
     position: relative;
