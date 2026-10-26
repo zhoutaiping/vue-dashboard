@@ -894,7 +894,8 @@ export default {
     drillToProvince(code, name, region = '') {
       // 从全国下钻到省份：排名维度重置为「达标率」（省内默认维度）
       // 省内切换区域（蒙西↔蒙东等）不算重新下钻，保留用户当前维度
-      if (this.query.level === 'country') {
+      const fromCountry = this.query.level === 'country'
+      if (fromCountry) {
         this.setRankType(REGION_RANK_TYPES[0].value)
       }
       this.query.level = 'province'
@@ -905,8 +906,14 @@ export default {
       // 面包屑：全国 / 省 / 区域（区域层只在拆分省份下钻时出现）
       this.levels = [Object.assign({}, ROOT_LEVEL), { code, name }]
       if (region) this.levels.push({ code: `${code}|${region}`, name: region })
-      // 下钻后电价菜单不含标杆电价：清空该选中态，避免菜单项消失后仍按标杆电价着色
-      if (this.priceType === 'benchmark') this.priceType = ''
+      // 下钻到省：电价维度复位到菜单首项（风电结算电价），与「返回全国」保持一致的默认态。
+      // 省内菜单不含标杆电价，沿用旧选择会出现「菜单项消失但地图仍按标杆电价着色」；
+      // 省内切区域（蒙西↔蒙东等）不算重新下钻，保留用户当前选择
+      if (fromCountry) {
+        this.priceType = PRICE_OPTIONS[0].id
+      } else if (!this.priceOptions.some(o => o.id === this.priceType)) {
+        this.priceType = PRICE_OPTIONS[0].id
+      }
     },
     // 地图点击：点的是拆分区域（蒙西/蒙东、冀北/河北南网）→ 下钻到区域；点的是省份 → 下钻到省
     handleRegionClick(payload) {
@@ -988,6 +995,8 @@ export default {
       this.query.regionName = ''
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
+      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
+      this.priceType = PRICE_OPTIONS[0].id
     },
     handlePieClick(params) {
       const target = CATEGORIES.find(c => c.name === params.name)
