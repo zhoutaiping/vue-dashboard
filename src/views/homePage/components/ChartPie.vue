@@ -246,5 +246,7 @@ export default {
 <style lang="scss" scoped>
 .chart-pie {
   width: 100%;
+  /* 画布为固定像素：容器变窄时先裁掉，避免溢出到父级滚动容器里产生假滚动条 */
+  overflow: hidden;
 }
 </style>

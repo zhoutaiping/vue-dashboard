@@ -101,7 +101,7 @@
             :series="manageTrend.series"
             :colors="MANAGE_COLORS"
             stack="total"
-            unit="单位：个"
+            :y-axis-names="['单位：个', '']"
             height="300px"
           />
         </PanelCard>
@@ -445,13 +445,23 @@ export default {
           name: f.label,
           type: f.type,
           yAxisIndex: f.type === 'line' ? 1 : 0,
-          data: list.map(item => Number(item[f.field]) || 0)
+          data: list.map(item => {
+            const value = Number(item[f.field]) || 0
+            // 达标率口径兼容：接口可能返回比率（0.85）也可能返回百分数（85），
+            // 统一换算成百分数，轴名「达标率(%)」与刻度 40%/60% 才成立
+            return f.field === 'yield' && value > 0 && value <= 1
+              ? Math.round(value * 1000) / 10
+              : value
+          })
         }))
       }
     },
-    // 图表双 Y 轴名称（非标柱系列为度电收入）
+    // 图表双 Y 轴名称（左轴 = 柱系列指标，右轴 = 折线达标率）
+    // 统一写成「指标(单位)」：只写「小时」这类单位在图上会变成一个孤立小字，看不出是什么指标
     operateChartYAxis() {
-      return this.operateEnergyType === 'nonstandard' ? ['元/kWh', '达标率(%)'] : ['小时', '达标率(%)']
+      return this.operateEnergyType === 'nonstandard'
+        ? ['度电收入(元/kWh)', '达标率(%)']
+        : ['利用小时数(h)', '达标率(%)']
     },
     // 饼图配色按行业名匹配，与数据顺序解耦
     pieColors() {

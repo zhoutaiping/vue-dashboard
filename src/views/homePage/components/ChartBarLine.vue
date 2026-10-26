@@ -118,6 +118,26 @@ export default {
         }
       })
     },
+    // 画布尺寸同步：echarts 的 canvas 是固定像素，容器变矮/变高后不 resize 就会溢出容器，
+    // 在可滚动的卡片里表现为「内容明明放得下却出现滚动条」的假溢出
+    // （切换能源类型、指标项数变化都会改变容器高度，重绘后必须补一次尺寸同步）
+    syncSize() {
+      if (!this.chart || !this.$refs.chart) return
+      const el = this.$refs.chart
+      // 容器被隐藏（宽高为 0）时不 resize，避免把画布压成 0
+      if (!el.clientWidth || !el.clientHeight) return
+      if (this.chart.getWidth() !== el.clientWidth || this.chart.getHeight() !== el.clientHeight) {
+        this.chart.resize()
+      }
+    },
+    // 轴名是否带百分比单位（如「达标率(%)」）：带 % 时按百分比显示刻度
+    isPercentAxis(name) {
+      return String(name || '').indexOf('%') > -1
+    },
+    // 是否为整数轴（项目个数等）：是则禁止小数刻度，避免数据很小时出现 0.2/0.4 这类刻度
+    isIntegerAxis(values) {
+      return values.length > 0 && values.every(v => Number.isInteger(Number(v)))
+    },
     renderChart() {
       if (!this.chart) return
       const hasSecondAxis = this.series.some(s => s.yAxisIndex === 1)
@@ -147,10 +167,19 @@ export default {
         })
       })
 
+      // 各 Y 轴的数据合集：用于判断该轴是否为「整数轴」（项目个数这类不能出现小数刻度）
+      const axisValues = [0, 1].map(index => series
+        .filter(s => (s.yAxisIndex || 0) === index)
+        .reduce((acc, s) => acc.concat(s.data || []), []))
+      // 是否配置了轴名/单位：有则多留一行，避免轴名与图例贴字
+      const hasAxisName = !!(this.yAxisNames[0] || this.yAxisNames[1])
+
       const option = {
         color: this.colors,
         tooltip: {
           trigger: 'axis',
+          // 容器加了 overflow: hidden（裁掉溢出的画布），浮层需限制在图表内，否则贴边时会被裁掉
+          confine: true,
           axisPointer: { type: 'shadow' },
           // 折线系列 itemStyle.color=#fff（白心圆点），默认 marker 会渲染成白色圆点看不见；
           // 按系列类型自绘 marker 与图例一致：柱=色块，折线=彩边白心圆点
@@ -189,16 +218,23 @@ export default {
             textStyle: { fontSize: 13, color: '#303133', fontWeight: 500 }
           }
           : { show: false },
+        // 单位标签：与图例同一行、贴右边缘，灰字小一号（与轴名/刻度同一套灰阶，不抢图例）
         graphic: this.unit
           ? [{
             type: 'text',
             right: 0,
-            // 与图例文字（top:0，fontSize 13，行高约 18px）垂直居中对齐
-            top: 5,
-            style: { text: this.unit, fill: '#08f', fontSize: 13, fontWeight: 500, textVerticalAlign: 'middle' }
+            top: 4,
+            style: { text: this.unit, fill: '#909399', fontSize: 12, textVerticalAlign: 'middle' }
           }]
           : undefined,
-        grid: { left: 8, right: hasSecondAxis ? 8 : 12, bottom: 4, top: this.showLegend ? 36 : 16, containLabel: true },
+        // 顶部留白：图例 18 + 轴名一行 22（无轴名时不占这一行，把高度还给绘图区）
+        grid: {
+          left: 8,
+          right: hasSecondAxis ? 8 : 12,
+          bottom: 4,
+          top: (this.showLegend ? 36 : 16) + (hasAxisName ? 8 : 0),
+          containLabel: true
+        },
         xAxis: {
           type: 'category',
           data: this.xData,
@@ -217,30 +253,47 @@ export default {
             name: this.yAxisNames[0] || '',
             // 轴名默认居中于轴顶，窄容器下左半截会被裁掉（只剩"/kWh"）；
             // 改为左对齐锚定轴顶向右延伸，保证完整落在容器内
+            // nameLocation: 'end' 固定贴轴顶，与图例行（top 0~18）分行显示，不互相压字
+            nameLocation: 'end',
             nameTextStyle: { color: '#909399', fontSize: 11, align: 'left' },
             nameGap: 10,
+            // 整数轴（项目个数等）禁止小数刻度：数据很小时不会冒出 0.2/0.4 这类刻度
+            minInterval: this.isIntegerAxis(axisValues[0]) ? 1 : undefined,
             axisLine: { show: false },
             axisTick: { show: false },
             splitLine: { lineStyle: { color: '#e8ebf0', type: 'dashed' }},
-            axisLabel: { color: '#606266', fontSize: 12 }
+            axisLabel: {
+              color: '#606266',
+              fontSize: 12,
+              // 百分比轴（轴名含 %）刻度自带 % 后缀，避免出现 0.4/0.8 这种无单位数值
+              formatter: this.isPercentAxis(this.yAxisNames[0]) ? '{value}%' : '{value}'
+            }
           },
           {
             type: 'value',
             name: this.yAxisNames[1] || '',
             // 右轴镜像：右对齐锚定轴顶向左延伸，避免超出右缘
+            nameLocation: 'end',
             nameTextStyle: { color: '#909399', fontSize: 11, align: 'right' },
             nameGap: 10,
+            minInterval: this.isIntegerAxis(axisValues[1]) ? 1 : undefined,
             show: hasSecondAxis,
             axisLine: { show: false },
             axisTick: { show: false },
             splitLine: { show: false },
-            axisLabel: { color: '#909399', fontSize: 11, formatter: '{value}' }
+            axisLabel: {
+              color: '#909399',
+              fontSize: 11,
+              formatter: this.isPercentAxis(this.yAxisNames[1]) ? '{value}%' : '{value}'
+            }
           }
         ],
         series
       }
 
       this.chart.setOption(Object.assign(option, this.extraOption), true)
+      // 重绘后按容器实际尺寸校正画布（切换类型导致高度变化时尤需）
+      this.syncSize()
     }
   }
 }
@@ -249,5 +302,7 @@ export default {
 <style lang="scss" scoped>
 .chart-bar-line {
   width: 100%;
+  /* 画布是固定像素：容器变矮时先裁掉溢出部分，避免溢出到父级滚动容器里产生假滚动条 */
+  overflow: hidden;
 }
 </style>

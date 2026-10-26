@@ -121,7 +121,7 @@ export default {
     padding: 12px;
     min-height: 0;
     /* 内容高度受限时由插槽内部（如列表）自行滚动 */
-    overflow: hidden;
+    overflow: hidden auto;
   }
 }
 </style>
