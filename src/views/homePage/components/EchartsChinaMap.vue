@@ -106,7 +106,9 @@
 
 <script>
 import * as echarts from 'echarts'
-import chinaJson from '@/assets/maps/china.json'
+// 全国底图采用「分区版」GeoJSON：内蒙古拆成 蒙西/蒙东、河北拆成 冀北/河北南网
+// 由 scripts/build-split-map.js 生成（地市面多边形合并），properties.name 即区域名
+import chinaJson from '@/assets/maps/china-region.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
 import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
@@ -114,6 +116,9 @@ import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
 echarts.registerMap('china', chinaJson)
+
+// 去掉行政后缀，用于区域内地市面匹配（呼和浩特市→呼和浩特、锡林郭勒盟→锡林郭勒）
+const stripSuffix = name => String(name || '').replace(/(市|盟|地区|自治州|自治区|省)$/, '')
 
 const DEFAULT_COLOR = '#0088ff'
 
@@ -166,6 +171,11 @@ export default {
     },
     // 当前地图区域：'' = 全国地图；省份行政 code = 下钻到该省区县地图
     mapCode: { type: String, default: '' },
+    // 下钻到的业务区域名（蒙西/蒙东、冀北/河北南网）；非拆分省份为空
+    // 与 mapCode 组合决定加载哪张图：只画该区域内的地市
+    region: { type: String, default: '' },
+    // 当前区域包含的地市名列表（由父级按 REGION_SPLIT 提供），用于过滤省份 GeoJSON 的 feature
+    regionCities: { type: Array, default: () => [] },
     // 点位详情接口数据（/largeScreen/projectDetail 返回 data）：projectType 决定卡片展示字段
     pointDetail: { type: Object, default: null },
     // 点位详情接口加载中
@@ -178,7 +188,7 @@ export default {
       chart: null,
       loading: false,
       isFullscreen: false,
-      // 已加载过的省份地图缓存 { code: true }
+      // 已加载过的地图缓存 { mapKey: true }
       mapCache: {},
       // 点击点位弹出的详情卡片 { x, y, raw }，点击地图空白处关闭
       activePoint: null,
@@ -188,6 +198,12 @@ export default {
     }
   },
   computed: {
+    // 地图注册名：全国 = 'china'；下钻 = '{省code}' 或 '{省code}|{区域名}'
+    // 区域维度进 key，保证 蒙西/蒙东 各自注册一份只含本区域地市的 GeoJSON
+    mapKey() {
+      if (!this.mapCode) return 'china'
+      return this.region ? `${this.mapCode}|${this.region}` : this.mapCode
+    },
     // 卡片主题色：按左下角补贴属性分类取色（原型：无补贴-蓝、有补贴-橙、合规清单-绿）
     // tag 文字仍为项目一级类型（行业），颜色随补贴分类
     pointCardColor() {
@@ -262,8 +278,9 @@ export default {
         this.renderOption()
       }
     },
-    // 省份下钻 / 返回：切换注册对应省市区县地图
-    mapCode() {
+    // 省份 / 区域下钻、返回全国：切换注册对应的地图
+    // 用 mapKey 统一监听，mapCode 与 region 单独变化都会落到这里（区域间切换也生效）
+    mapKey() {
       this.loadRegionMap()
     },
     // 全屏切换：图例位置需复位到贴边
@@ -369,15 +386,18 @@ export default {
       this._onDocOut = null
       this._onAnyScroll = null
     },
-    // 加载并注册省市区县边界 GeoJSON（本地文件，webpack 动态 import 按需加载异步 chunk），成功后重绘
+    // 加载并注册当前层级的地图 GeoJSON（本地文件，webpack 动态 import 按需加载异步 chunk），成功后重绘
+    //   mapKey = 'china'                 → 全国分区底图（模块级已注册）
+    //   mapKey = '{code}'                → 整省地市图
+    //   mapKey = '{code}|{region}'       → 只含该业务区域（蒙西/蒙东、冀北/河北南网）地市的图
     async loadRegionMap() {
-      const code = this.mapCode
-      if (!code) {
+      const key = this.mapKey
+      if (key === 'china') {
         // 返回全国
         this.renderOption()
         return
       }
-      if (this.mapCache[code]) {
+      if (this.mapCache[key]) {
         this.renderOption()
         return
       }
@@ -389,13 +409,16 @@ export default {
         //   webpack 无法静态收集上级目录模块，运行时报 Cannot find module，因此这里不能用 import(`../map/${code}_full.json`)
         //   静态路径映射两种环境都能解析，生产构建会拆成独立的异步 chunk，按需加载不占首屏体积
         // 兼容不同编译环境的模块互操作（default 导出可能被 interop 包一层）
+        const [code, region] = key.split('|')
         const loaders = provinceMapLoaders.default || provinceMapLoaders
         const loader = loaders[code]
         if (!loader) throw new Error(`缺少省份地图文件: ${code}.json（请先运行 node scripts/download-map-data.js）`)
         const geoJsonModule = await loader()
-        const geoJson = (geoJsonModule && geoJsonModule.default) || geoJsonModule
-        echarts.registerMap(code, geoJson)
-        this.mapCache[code] = true
+        const provinceGeoJson = (geoJsonModule && geoJsonModule.default) || geoJsonModule
+        // 区域下钻：只保留本区域的地市面，蒙西下钻后不会再画出蒙东
+        const geoJson = region ? this.filterRegionGeoJson(provinceGeoJson) : provinceGeoJson
+        echarts.registerMap(key, geoJson)
+        this.mapCache[key] = true
         this.renderOption()
       } catch (error) {
         console.error('省份地图加载失败:', error)
@@ -403,6 +426,22 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    // 按 regionCities 过滤省级 GeoJSON 的 feature（区域下钻用）
+    // 匹配时去掉行政后缀，兼容 GeoJSON 的「呼和浩特市」与配置里的「呼和浩特」
+    filterRegionGeoJson(provinceGeoJson) {
+      const wanted = (this.regionCities || []).map(stripSuffix)
+      if (!wanted.length) return provinceGeoJson
+      const features = (provinceGeoJson.features || []).filter(feature => {
+        const name = stripSuffix(feature && feature.properties && feature.properties.name)
+        return wanted.indexOf(name) >= 0
+      })
+      // 一个都没匹配上说明配置与 GeoJSON 不一致：回退整省，至少不出现空地图
+      if (!features.length) {
+        console.warn('区域地市与地图数据未匹配，回退为整省地图:', this.region, this.regionCities)
+        return provinceGeoJson
+      }
+      return Object.assign({}, provinceGeoJson, { features })
     },
     // 按分类分组为多个 scatter series，每个分类一种颜色
     // 点位若带补贴属性图标（subsidyIcons = station-1/2/3，蓝=无补贴 / 橙=有补贴 / 绿=合规清单），
@@ -506,7 +545,7 @@ export default {
     renderOption() {
       if (!this.chart) return
       // GeoJSON 异步加载未完成时（省地图尚未注册）先渲染全国，避免 setOption 使用未注册的 map 名报错
-      const mapName = this.mapCode && this.mapCache[this.mapCode] ? this.mapCode : 'china'
+      const mapName = this.mapKey !== 'china' && this.mapCache[this.mapKey] ? this.mapKey : 'china'
       const values = (this.provinceData || []).map(d => Number(d.value) || 0)
       // 未选电价维度 → 无着色数据：地图纯白、隐藏图例（交互7）
       const hasColor = values.length > 0

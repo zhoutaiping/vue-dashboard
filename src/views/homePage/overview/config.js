@@ -306,6 +306,8 @@ export const DEFAULT_QUERY = {
   provinceCode: '',
   cityCode: '',
   provinceName: '',
+  // 下钻到的业务区域（蒙西/蒙东、冀北/河北南网）；非拆分省份为空
+  regionName: '',
   category: 'all', // 行业单选：'all' = 全部（industry 传空字符串），其它为分类 id
   month: DEFAULT_MONTH,
   rankType: 'projectCount',
@@ -382,6 +384,49 @@ export function cityRegionName(provinceShortName, cityName) {
   }))
   return hit ? hit.name : ''
 }
+
+// 区域名别名：接口/历史数据可能用别的叫法，统一归一到与地图 GeoJSON properties.name 一致的名称
+// （china-region.json 由 scripts/build-split-map.js 生成，区域名取自 REGION_SPLIT）
+const REGION_ALIAS = { 冀南: '河北南网', 河北南: '河北南网', 蒙西电网: '蒙西', 蒙东电网: '蒙东' }
+
+// 区域字典：区域名 → { name, province(省短名), provinceFull(接口全称), code(行政码), cities }
+// 由 REGION_SPLIT 派生：地图过滤 feature、点位过滤、面包屑、下钻接口入参都从这里取
+export const REGION_META = (() => {
+  const meta = {}
+  Object.keys(REGION_SPLIT).forEach(province => {
+    const hit = PROVINCE_LIST.find(p => p.name === province)
+    REGION_SPLIT[province].forEach(region => {
+      meta[region.name] = {
+        name: region.name,
+        province,
+        provinceFull: hit ? hit.full : province,
+        code: hit ? hit.code : '',
+        cities: region.cities.slice()
+      }
+    })
+  })
+  return meta
+})()
+
+// 区域名归一（含别名）：是已知区域返回标准区域名，否则返回空字符串
+export function normalizeRegionName(name) {
+  const key = String(name || '').trim()
+  if (!key) return ''
+  if (REGION_META[key]) return key
+  const alias = REGION_ALIAS[key]
+  return alias && REGION_META[alias] ? alias : ''
+}
+
+// 区域名 → 区域信息 { name, province, provinceFull, code, cities }；不是区域返回 null
+export function findRegion(name) {
+  const normalized = normalizeRegionName(name)
+  return normalized ? REGION_META[normalized] : null
+}
+
+// 下钻到拆分区域（蒙西/蒙东、冀北/河北南网）时，接口 provinceName 传什么：
+//   true  → 传区域名（后端按区域返回数据时用这个，与全国层级返回的区域 key 一致）
+//   false → 传省全称（内蒙古自治区/河北省），由前端按地市名过滤区域
+export const DRILL_REGION_AS_PROVINCE_NAME = true
 
 // 接口全称（山东省/内蒙古自治区）→ 地图短名（山东/内蒙古）
 export function provinceShortName(fullName) {
