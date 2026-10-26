@@ -288,36 +288,33 @@ export default {
     // 在各自投影下算出的 center 有微小差异，会随缩放累积放大导致底座漂移。
     // 直接对齐绝对值可保证任意层级下两层严格重合，屏幕间距恒等于 layoutCenter 偏移。
     // 全程只读模型/坐标系，不走 getOption + setOption（避免深拷贝与全量更新造成的卡顿）。
-    syncShadowGeo() {
-      if (!this.chart || this.chart.isDisposed()) return
-      const ecModel = this.chart.getModel()
-      // echarts 4 的 getComponent({mainType, id}) 查不到 geo 组件，需遍历按 id 匹配
-      let main = null
-      let shadow = null
-      ecModel.eachComponent({ mainType: 'geo' }, component => {
-        if (component.id === 'mapMain') main = component
-        if (component.id === 'mapShadow') shadow = component
-      })
-      if (!main || !shadow || !main.coordinateSystem || !shadow.coordinateSystem) return
-      const zoom = main.coordinateSystem.getZoom()
-      const center = main.coordinateSystem.getCenter()
-      shadow.coordinateSystem.setZoom(zoom)
-      shadow.coordinateSystem.setCenter(center)
-      shadow.setZoom(zoom)
-      shadow.setCenter(center)
-      // 空变换（dx/dy = 0）：仅触发 updateTransform 重绘，不改变任何值
-      this.chart.dispatchAction({ type: 'geoRoam', componentType: 'geo', geoId: 'mapShadow', dx: 0, dy: 0 })
-    },
+    
     initChart() {
       this.chart = echarts.init(this.$refs.chart)
       this.renderOption()
       this.chart.on('click', this.handleClick)
       // 主图缩放/平移时同步灰色底座：微任务中执行，与主图在同一帧重绘，视觉上完全同步
-      this.chart.on('georoam', params => {
-        // 只处理主图触发的事件，避免同步动作自身触发的事件再次进入造成递归
-        if (!params || params.geoId !== 'mapMain') return
-        Promise.resolve().then(() => this.syncShadowGeo())
-      })
+      this.chart.on("georoam", (params) => {
+        // 只处理主地图的缩放、拖动事件，避免底座事件重复转发
+        if (!params || params.geoId !== "mapMain") return;
+
+        const action = {
+          type: "geoRoam",
+          componentType: "geo",
+          geoId: "mapShadow",
+          dx: params.dx || 0,
+          dy: params.dy || 0,
+        };
+
+        // 只有缩放事件才携带 zoom，避免把未定义的值传进去
+        if (params.zoom != null) {
+          action.zoom = params.zoom;
+          action.originX = params.originX;
+          action.originY = params.originY;
+        }
+
+        this.chart.dispatchAction(action);
+      });
       // 悬浮省份/市区时在鼠标处显示 province 图标（原型效果）；指向点位或移出地图时隐藏
       // 注意：区域命中的事件归属是绑定了 geoIndex 的 map series（componentType='series'、
       // componentSubType='map'），并非 'geo'，因此两种来源都要覆盖
