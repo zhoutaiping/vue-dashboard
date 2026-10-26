@@ -187,9 +187,6 @@ import {
   DRILL_REGION_AS_PROVINCE_NAME,
   toCoordNumber,
   cityRegionName,
-  REGION_SPLIT,
-  regionProvinceShort,
-  splitProvinceByCityName,
   PROVINCE_CAPITALS,
   station_type,
   fullscreenIcon

@@ -111,7 +111,7 @@ import * as echarts from 'echarts'
 import chinaJson from '@/assets/maps/china-region.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
-import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue, cityRegionName } from '../overview/config'
+import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
@@ -290,9 +290,6 @@ export default {
   },
   mounted() {
     this.initChart()
-    // 全国地图分区化（异步）：接口已按业务分区（蒙西/蒙东、冀北/河北南网）返回内蒙古/河北数据，
-    // 全国图需把这两省替换为地市级区域才能体现分区着色；完成后重绘
-    this.ensureSplitChinaMap().then(ok => { if (ok) this.renderOption() })
   },
   beforeDestroy() {
     this.unbindWrapEvents()
@@ -562,7 +559,7 @@ export default {
           // 悬浮时省份名保持显示（透明绿底上深色文字）
           label: { show: true, color: '#1a5c1a', fontWeight: 600 }
         },
-        data: hasColor ? this.expandSplitRegions(this.provinceData) : []
+        data: hasColor ? this.provinceData : []
       }
     },
     renderOption() {
@@ -606,7 +603,7 @@ export default {
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
             // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
             if (params.seriesType === 'map' || params.componentType === 'geo') {
-              const data = this.regionTooltipData[params.name] || this.matchRegionData(params.name)
+              const data = this.regionTooltipData[params.name]
               const selected = this.priceOptions.find(o => o.id === this.priceType)
               const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
               const list = selected ? base.filter(item => item.field === selected.field) : base
