@@ -306,7 +306,7 @@ export const DEFAULT_QUERY = {
   provinceCode: '',
   cityCode: '',
   provinceName: '',
-  category: 'all', // 行业单选：'all' = 全部（industry 传空字符串），其它为分类 id
+  categories: [], // 行业多选：[] = 全部（industry 传空字符串），选中项为分类 id 数组
   month: DEFAULT_MONTH,
   rankType: 'projectCount',
   energyType: 'wind' // 风电 / 光伏 / 非标
@@ -381,6 +381,34 @@ export function cityRegionName(provinceShortName, cityName) {
     return city === name || city.indexOf(name) === 0 || name.indexOf(city) === 0
   }))
   return hit ? hit.name : ''
+}
+
+// 分区名（蒙西/蒙东、冀北/河北南网）→ 所属省短名；非分区名返回 ''
+// mapDisplay 接口已按分区返回内蒙古/河北数据（省名 key 为分区名），用于识别分区数据
+export function regionProvinceShort(regionName) {
+  const name = String(regionName || '').trim()
+  if (!name) return ''
+  const keys = Object.keys(REGION_SPLIT)
+  for (let i = 0; i < keys.length; i++) {
+    if (REGION_SPLIT[keys[i]].some(g => g.name === name)) return keys[i]
+  }
+  return ''
+}
+
+// 地市名（GeoJSON 全名，如 呼和浩特市/锡林郭勒盟）→ 所属拆分省 { province, region }
+// 全国地图上拆分省按地市展示分区，点击地市需下钻到所属省；非拆分省地市返回 null
+export function splitProvinceByCityName(cityName) {
+  const short = String(cityName || '').replace(/(自治州|地区|市|盟|区|县)$/, '')
+  if (!short) return null
+  const keys = Object.keys(REGION_SPLIT)
+  for (let i = 0; i < keys.length; i++) {
+    const hit = REGION_SPLIT[keys[i]].find(g => g.cities.some(c => {
+      const city = String(c).replace(/(自治州|地区|市|盟|区|县)$/, '')
+      return city === short || city.indexOf(short) === 0 || short.indexOf(city) === 0
+    }))
+    if (hit) return { province: keys[i], region: hit.name }
+  }
+  return null
 }
 
 // 接口全称（山东省/内蒙古自治区）→ 地图短名（山东/内蒙古）

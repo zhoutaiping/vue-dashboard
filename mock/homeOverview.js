@@ -230,9 +230,22 @@ module.exports = [
       }))
       const totalCount = industryCounts.reduce((sum, item) => sum + item.projectCount, 0)
 
-      // 全部行：若指定单一行业则取该行业数量，否则取合计
-      const allCount = industry && industry !== '全部'
-        ? (industryCounts.find(i => i.industry === industry) || { projectCount: 0 }).projectCount
+      // 行业参数支持 JSON 数组串（["能源电力","其他"]）或逗号串；未指定行业取合计
+      const industries = (() => {
+        const raw = industry || ''
+        if (typeof raw === 'string' && raw.trim().charAt(0) === '[') {
+          try {
+            const arr = JSON.parse(raw)
+            if (Array.isArray(arr)) return arr.map(s => String(s).trim()).filter(Boolean)
+          } catch (e) { /* 解析失败回退逗号串 */ }
+        }
+        return String(raw).split(',').map(s => s.trim()).filter(Boolean)
+      })()
+      const allCount = industries.length
+        ? industries.reduce((sum, name) => {
+          const hit = industryCounts.find(i => i.industry === name) || { projectCount: 0 }
+          return sum + hit.projectCount
+        }, 0)
         : totalCount
 
       // 百分比保留两位小数（字符串，与后端一致）
@@ -240,10 +253,8 @@ module.exports = [
         percentage: totalCount ? ((item.projectCount / totalCount) * 100).toFixed(2) : '0'
       }))
 
-      // 行业筛选：指标按所选行业占比缩小（模拟后端按 industry 过滤）
-      const industryRatio = industry && industry !== '全部'
-        ? ((industryCounts.find(i => i.industry === industry) || { projectCount: 0 }).projectCount / totalCount)
-        : 1
+      // 行业筛选：指标按所选行业（支持逗号多选）占比缩小（模拟后端按 industry 过滤）
+      const industryRatio = allCount && industries.length ? allCount / totalCount : 1
 
       return ok({
         constructionCount: Math.round(6220 * ratio * industryRatio * (status === '2' ? 0.2 : 1)),
@@ -312,8 +323,17 @@ module.exports = [
     type: 'post',
     response: config => {
       const body = config.body || {}
-      // 行业筛选：空 = 全部；多选逗号分隔（与前端 industryParam 对应）
-      const industryFilter = String(body.industry || '').split(',').filter(Boolean)
+      // 行业筛选：空/'[]' = 全部；JSON 数组串（["能源电力","其他"]）或逗号串（与前端 industryParam 对应）
+      const industryFilter = (() => {
+        const raw = String(body.industry || '').trim()
+        if (raw.charAt(0) === '[') {
+          try {
+            const arr = JSON.parse(raw)
+            if (Array.isArray(arr)) return arr.map(s => String(s).trim()).filter(Boolean)
+          } catch (e) { /* 解析失败回退逗号串 */ }
+        }
+        return raw.split(',').filter(Boolean)
+      })()
       // 状态筛选：1在建 2运营 3在建和运营 4未选择（未选择 = 全部，原型注5）
       const status = String(body.status || '4')
       const matchProject = p => {
@@ -333,12 +353,36 @@ module.exports = [
         group.cityPriceList = buildCityPriceList(p)
         return ok(group)
       }
-      // 全国请求：各省分组数组
-      return ok(PROVINCES.map((p, i) => {
+      // 全国请求：省名 key 映射（与真实接口一致：{ 省名: 电价汇总+项目列表 }）
+      // 内蒙古/河北按业务分区拆分返回（蒙西/蒙东、冀北/河北南网），项目按 cityName 归属分区
+      const SPLIT_REGIONS = {
+        内蒙古: [
+          { name: '蒙西', cities: ['呼和浩特', '包头', '鄂尔多斯', '乌兰察布', '乌海', '巴彦淖尔', '锡林郭勒', '阿拉善'] },
+          { name: '蒙东', cities: ['赤峰', '通辽', '呼伦贝尔', '兴安盟'] }
+        ],
+        河北: [
+          { name: '冀北', cities: ['唐山', '张家口', '秦皇岛', '承德', '廊坊'] },
+          { name: '河北南网', cities: ['石家庄', '保定', '沧州', '衡水', '邢台', '邯郸'] }
+        ]
+      }
+      const inRegion = (project, cities) => cities.some(c => String(project.cityName || '').indexOf(c) > -1)
+      const result = {}
+      PROVINCES.forEach((p, i) => {
+        const splits = SPLIT_REGIONS[p.name]
+        if (splits) {
+          const list = (buildProvinceGroup(p, i + 2).projectList || []).filter(matchProject)
+          splits.forEach((r, j) => {
+            const group = buildProvinceGroup(p, i * 10 + 100 + j)
+            group.projectList = list.filter(pr => inRegion(pr, r.cities))
+            result[r.name] = group
+          })
+          return
+        }
         const group = buildProvinceGroup(p, i + 2)
         group.projectList = (group.projectList || []).filter(matchProject)
-        return group
-      }))
+        result[fullProvinceName(p.name)] = group
+      })
+      return ok(result)
     }
   },
 
