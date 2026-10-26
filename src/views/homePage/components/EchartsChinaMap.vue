@@ -606,8 +606,11 @@ export default {
       const min = hasColor ? Math.min(...values) : 0
       const max = hasColor ? Math.max(...values) : 0
       // 全屏时左右浮层消失，图例贴边；否则对齐左侧浮层右缘（12 + 465 + 12）
-      // 全屏后左右浮层仍在（全屏作用于页面容器），图例保持对齐左侧浮层右缘：12 + 465 + 12
-      const legendLeft = 489
+      // 地图铺满底层，左右报表浮层各占 25% 浮在地图上；颜色图例需避开左浮层（25% + 12 边距 + 12 间距）。
+      // 窄屏（≤1024px）下报表不再浮在地图上，图例贴地图左缘
+      const isNarrow = window.innerWidth <= 1024
+      const wrapW = (this.$el && this.$el.clientWidth) || window.innerWidth || 0
+      const legendLeft = isNarrow ? 12 : Math.round(wrapW * 0.25) + 24
 
       const option = {
         tooltip: {
@@ -905,22 +908,21 @@ export default {
     color: #fff;
   }
 
-  /* 浮层避开父级左右悬浮栏（各 465px + 12 边距 + 12 间距 = 489px），对齐原型位置 */
+  /* 浮层避开父级左右报表浮层（各 25% + 12 边距 + 12 间距 = calc(25% + 24px)） */
   &__panel--build {
-    /* 时间控件（工具条右缘 489px）正下方 */
+    /* 时间控件（工具条右缘）正下方 */
     top: 60px;
-    right: 489px;
+    right: calc(25% + 24px);
   }
 
   &__panel--subsidy {
-    right: 489px;
+    right: calc(25% + 24px);
     bottom: 12px;
   }
 
-  /* 颜色图例由 echarts visualMap 绘制在画布左下角（left: 489px / 全屏 12px） */
+  /* 颜色图例由 echarts visualMap 绘制在画布左下角（JS legendLeft = 25% + 24px），电价菜单排在其右侧 */
   &__panel--legend {
-    /* 电价菜单排在 visualMap 右侧（489 + 图例约 48 宽 + 8 间距） */
-    left: 545px;
+    left: calc(25% + 80px);
     bottom: 12px;
     display: flex;
     flex-direction: row;
@@ -929,6 +931,22 @@ export default {
     padding: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  /* 窄屏（≤1024px）：报表不再浮在地图上，浮层贴地图自身边缘 */
+  @media (max-width: 1024px) {
+    &__panel--build {
+      top: 56px;
+      right: 12px;
+    }
+
+    &__panel--subsidy {
+      right: 12px;
+    }
+
+    &__panel--legend {
+      left: 64px;
+    }
   }
 
   /* 多选行：勾选框 / 图标 + 文案 */

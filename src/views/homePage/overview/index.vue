@@ -1,7 +1,7 @@
 <template>
   <div class="home-overview">
     <div class="home-overview__body">
-      <!-- 地图铺满底层 -->
+      <!-- 地图铺满底层，左右报表浮层各占 25% 浮在地图上 -->
       <div class="home-overview__map">
         <EchartsChinaMap
           :points="visiblePoints"
@@ -871,7 +871,7 @@ export default {
     min-height: 0;
   }
 
-  /* 地图铺满底层 */
+  /* 地图铺满底层，左右报表浮层各占 25% 浮在地图上，中间约 50% 露出地图 */
   &__map {
     position: absolute;
     top: 0;
@@ -884,9 +884,9 @@ export default {
   &__toolbar {
     position: absolute;
     top: 12px;
-    /* 对齐加宽后的左右浮层（12 + 465 宽 + 12 间距） */
-    left: 489px;
-    right: 489px;
+    /* 避开左右浮层（各 25% 宽 + 12 边距 + 12 间距） */
+    left: calc(25% + 24px);
+    right: calc(25% + 24px);
     z-index: 11;
     display: flex;
     align-items: flex-start;
@@ -913,7 +913,7 @@ export default {
     }
   }
 
-  /* 左右统计面板浮在地图两侧 */
+  /* 左右统计面板浮在地图两侧（各占 25%），列内独立滚动 */
   &__col {
     position: absolute;
     top: 12px;
@@ -940,7 +940,7 @@ export default {
 
     &--left {
       left: 12px;
-      width: 465px;
+      width: 25%;
       border-radius: 12px;
       background-color: rgba(255,255,255,1);
       box-shadow: 0px 0px 16px 0px rgba(0,0,0,0.05);
@@ -951,7 +951,7 @@ export default {
 
     &--right {
       right: 12px;
-      width: 465px;
+      width: 25%;
       gap: 12px;
       .panel-card {
         border-radius: 12px;
@@ -1001,6 +1001,58 @@ export default {
     font-size: 12px;
     text-align: left;
     font-family: PingFangSC-regular;
+  }
+
+  /* 小于平板尺寸（≤1024px）：三列改为从上到下自适应排列，页面整体纵向滚动 */
+  @media (max-width: 1024px) {
+    /* 页面解除固定高度，允许纵向滚动 */
+    height: auto;
+    min-height: calc(100vh - 84px);
+    overflow-y: auto;
+    padding: 12px;
+
+    &__body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      /* 列内不再独立滚动，由页面统一滚动 */
+      overflow: visible;
+    }
+
+    /* 地图改为块状展示（固定高度），报表从上到下依次排列 */
+    &__map {
+      position: relative;
+      flex: none;
+      height: 56vh;
+      min-height: 360px;
+    }
+
+    &__toolbar {
+      /* 窄屏下工具条悬浮在地图顶部，左右两列换行自适应 */
+      left: 12px;
+      right: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* 左右列变全宽静态块（不再浮在地图上），由页面滚动承载 */
+    &__col {
+      position: static;
+      width: 100%;
+      overflow: visible;
+
+      &--left {
+        overflow: visible;
+      }
+    }
+
+    &__left-scroll {
+      overflow: visible;
+    }
+
+    /* 报表面板优化：窄屏下取消最小高度限制，自然撑开 */
+    &__col--right .summary-card {
+      min-height: 0;
+    }
   }
 }
 
