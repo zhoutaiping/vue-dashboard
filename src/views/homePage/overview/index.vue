@@ -593,6 +593,9 @@ export default {
       const region = this.query.regionName
       const province = this.currentProvinceShort
       return this.points.filter(p => {
+        // 跨省点位过滤：下钻到某省（含区域）时，projectList 若混入其它省份的项目
+        // （如请求蒙西却返回北京的项目），一律丢弃，避免点位飘在本省地图外
+        if (province && p.provinceName && String(p.provinceName).indexOf(province) < 0) return false
         if (region) {
           const cityRegion = cityRegionName(province, p.cityName)
           if (cityRegion && cityRegion !== region) return false

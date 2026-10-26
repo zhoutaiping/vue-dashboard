@@ -70,6 +70,35 @@ const PROVINCE_SPLIT = {
   河北: [{ name: '冀北' }, { name: '冀南' }]
 }
 
+// 拆分区域的「区域名 → 地市」映射（与前端 config REGION_SPLIT 完全一致）
+// 用途：① 下钻到区域时按区域名反查归属省份；② 只返回该区域地市的项目
+const SPLIT_REGIONS = {
+  内蒙古: [
+    { name: '蒙西', cities: ['呼和浩特', '包头', '鄂尔多斯', '乌兰察布', '乌海', '巴彦淖尔', '锡林郭勒', '阿拉善'] },
+    { name: '蒙东', cities: ['赤峰', '通辽', '呼伦贝尔', '兴安盟'] }
+  ],
+  河北: [
+    { name: '冀北', cities: ['唐山', '张家口', '秦皇岛', '承德', '廊坊'] },
+    { name: '河北南网', cities: ['石家庄', '保定', '沧州', '衡水', '邢台', '邯郸'] }
+  ]
+}
+
+// 区域名（含别名后缀，如「蒙西电网」）→ { province, name, cities }
+// 只做「入参包含区域名」的匹配，不做反向包含：否则入参「河北」会误命中「河北南网」
+function findSplitRegion(name) {
+  const key = String(name || '').replace(/(省|市|自治区)/g, '')
+  if (!key) return null
+  const provinces = Object.keys(SPLIT_REGIONS)
+  for (let i = 0; i < provinces.length; i++) {
+    const hit = SPLIT_REGIONS[provinces[i]].find(r => r.name === key || key.indexOf(r.name) > -1)
+    if (hit) return Object.assign({ province: provinces[i] }, hit)
+  }
+  return null
+}
+
+// 项目是否属于某区域（按 cityName 命中最简：城市名去后缀后包含区域地市名）
+const inRegion = (project, cities) => cities.some(c => String(project.cityName || '').indexOf(c) > -1)
+
 // 短名 → 接口全称（山东省/内蒙古自治区等）
 function fullProvinceName(name) {
   const special = {
@@ -342,27 +371,24 @@ module.exports = [
         return industryOk && statusOk
       }
       if (body.provinceName) {
-        // 省份请求：兼容全称/短名匹配
-        const p = PROVINCES.find(x => body.provinceName.indexOf(x.name) > -1) || PROVINCES[0]
+        const requestName = String(body.provinceName)
+        // 区域下钻（蒙西/蒙东/冀北/河北南网）：区域名不是省份名，必须先反查归属省份。
+        // 直接 find 会一路落空 → 兜底 PROVINCES[0]（北京），表现为「蒙西里冒出北京的项目」
+        const regionHit = findSplitRegion(requestName)
+        const p = (regionHit && PROVINCES.find(x => x.name === regionHit.province)) ||
+          PROVINCES.find(x => requestName.indexOf(x.name) > -1) || PROVINCES[0]
         const group = buildProvinceGroup(p, 5)
         group.projectList = (group.projectList || []).filter(matchProject)
+        // 区域请求：只返回本区域地市的项目（与全国视图的分区口径一致）
+        if (regionHit) {
+          group.projectList = group.projectList.filter(pr => inRegion(pr, regionHit.cities))
+        }
         // 下钻按市区着色：附带市区粒度电价（名称与 GeoJSON 区域一致）
         group.cityPriceList = buildCityPriceList(p)
         return ok(group)
       }
       // 全国请求：省名 key 映射（与真实接口一致：{ 省名: 电价汇总+项目列表 }）
       // 内蒙古/河北按业务分区拆分返回（蒙西/蒙东、冀北/河北南网），项目按 cityName 归属分区
-      const SPLIT_REGIONS = {
-        内蒙古: [
-          { name: '蒙西', cities: ['呼和浩特', '包头', '鄂尔多斯', '乌兰察布', '乌海', '巴彦淖尔', '锡林郭勒', '阿拉善'] },
-          { name: '蒙东', cities: ['赤峰', '通辽', '呼伦贝尔', '兴安盟'] }
-        ],
-        河北: [
-          { name: '冀北', cities: ['唐山', '张家口', '秦皇岛', '承德', '廊坊'] },
-          { name: '河北南网', cities: ['石家庄', '保定', '沧州', '衡水', '邢台', '邯郸'] }
-        ]
-      }
-      const inRegion = (project, cities) => cities.some(c => String(project.cityName || '').indexOf(c) > -1)
       const result = {}
       PROVINCES.forEach((p, i) => {
         const splits = SPLIT_REGIONS[p.name]
