@@ -6,6 +6,10 @@
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
 
+// 右侧竖向图例占用的宽度（px）：图标 12 + label 70 + 数值/占比文字 ≈ 168
+// 环形图圆心按「容器宽 - 图例宽」剩余空间居中，宽度越窄圆心越靠左
+const LEGEND_WIDTH = 168
+
 /**
  * 通用环形/饼图 / 南丁格尔玫瑰图（纯展示，不含业务）
  * 字段名通过 fieldMap 自定义：{ name, value }
@@ -72,10 +76,9 @@ export default {
   mounted() {
     this.initChart()
     // 容器尺寸变化（flex 自适应、面板显隐）时图表跟随缩放，window resize 覆盖不到这些场景
+    // 走 resize() 而非直接 chart.resize()：圆心比例也要随宽度重算
     if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
-      this.resizeObserver = new ResizeObserver(() => {
-        if (this.chart) this.chart.resize()
-      })
+      this.resizeObserver = new ResizeObserver(() => this.resize())
       this.resizeObserver.observe(this.$refs.chart)
     }
   },
@@ -89,6 +92,26 @@ export default {
     this.chart = null
   },
   methods: {
+    // 圆心横向比例：右侧竖向图例固定占 LEGEND_WIDTH，剩余空间居中放置环形图。
+    // 面板越窄圆心越靠左（在 0.20~0.32 之间连续变化），避免环形图与图例文字互挤或被挤出左边界；
+    // 容器宽度未知（首帧未布局）时按原设计 0.28 兜底
+    centerRatioFor(width) {
+      if (!width) return 0.28
+      return Math.min(0.32, Math.max(0.2, ((width - LEGEND_WIDTH) / 2) / width))
+    },
+    // 容器尺寸变化：缩放画布；宽度变化导致圆心比例变化时再微调一次圆心
+    // （高度变化不影响圆心比例，跳过 setOption 避免连续缩放时的无谓重绘）
+    resize() {
+      if (!this.chart) return
+      this.chart.resize()
+      if (!this.showLegend) return
+      const ratio = Number(this.centerRatioFor(this.chart.getWidth()).toFixed(3))
+      if (ratio === this._centerRatio) return
+      this._centerRatio = ratio
+      this.chart.setOption({
+        series: [{ center: [`${(ratio * 100).toFixed(1)}%`, '50%'] }]
+      })
+    },
     // 合并重绘：microtask 内去重，避免接口刷新时一次变更触发多轮 setOption
     scheduleRender() {
       if (this.renderScheduled) return
@@ -122,6 +145,11 @@ export default {
       }))
       // 按真实值计算占比（与渲染值无关）
       const realPercent = value => (total > 0 ? Math.round((value / total) * 100) : 0)
+
+      // 圆心横向位置：随容器宽度自适应（越窄越靠左，见 centerRatioFor）
+      const centerRatio = this.showLegend ? this.centerRatioFor(this.chart.getWidth()) : 0.5
+      // 记录当前比例：resize 时对比，比例没变就不重复 setOption
+      this._centerRatio = Number(centerRatio.toFixed(3))
 
       const option = {
         color: this.colors,
@@ -165,7 +193,9 @@ export default {
             type: 'pie',
             roseType: this.roseType || false,
             radius: this.donut ? ['25%', '68%'] : '55%',
-            center: this.showLegend ? ['28%', '50%'] : ['50%', '50%'],
+            center: this.showLegend
+              ? [`${(centerRatio * 100).toFixed(1)}%`, '50%']
+              : ['50%', '50%'],
             // 扇区之间白色缝隙（原型效果）
             itemStyle: {
               borderColor: '#fff',

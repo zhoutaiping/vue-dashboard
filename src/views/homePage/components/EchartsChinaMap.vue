@@ -127,6 +127,9 @@ const stripSuffix = name => String(name || '').replace(/(市|盟|地区|自治�
 
 const DEFAULT_COLOR = '#0088ff'
 
+// 浮动菜单距地图边缘的间距（px），与父级样式里的 --panel-gutter 保持一致
+const SIDE_GUTTER = 12
+
 /**
  * 通用 echarts 2D 中国地图（打点 / 悬浮卡片 / 分类图例显隐 / 全屏）
  * 纯展示：点位、分类配色、悬浮字段全部由 props 传入，不含任何业务请求
@@ -150,6 +153,10 @@ export default {
     layers: { type: Array, default: () => [] },
     activeLayers: { type: Array, default: () => [] },
     showFullscreen: { type: Boolean, default: false },
+    // 左右浮层占位比例：宽屏 = 父级左右栏各占 25%（传 0.25）；窄屏纵向布局无遮挡（传 0）
+    // 仅用于 echarts visualMap 的 px 定位（echarts 的 left 不支持 calc），
+    // 组件内浮动菜单的同类让位由 CSS 变量 --map-side-inset 控制，二者由父级同时下发
+    sideRatio: { type: Number, default: 0.25 },
     // 右上角状态筛选：可选项 + 已选中集合（.sync 双向，多选）
     buildOptions: { type: Array, default: () => [] },
     buildFilter: { type: Array, default: () => [] },
@@ -306,12 +313,28 @@ export default {
     // 全屏切换：图例位置需复位到贴边
     isFullscreen() {
       this.renderOption()
+    },
+    // 宽屏 ↔ 窄屏布局切换：地图容器宽度不变（都通栏），ResizeObserver 不会触发，
+    // 需单独重排图例位置（等布局完成后再取容器宽度）
+    sideRatio() {
+      this.syncLegendPosition()
     }
   },
   mounted() {
     this.initChart()
+    // 容器尺寸变化（父级改为百分比宽高、窄屏堆叠布局切换导致地图形变区域变化）时跟随缩放；
+    // resize mixin 只监听 window resize，覆盖不到这些场景，会导致地图拉伸变形或留白
+    if (this.$refs.chart && typeof ResizeObserver !== 'undefined') {
+      // 走 resize() 而非直接 chart.resize()：图例用 px 定位，需同步重排
+      this.resizeObserver = new ResizeObserver(() => this.resize())
+      this.resizeObserver.observe(this.$refs.chart)
+    }
   },
   beforeDestroy() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect()
+      this.resizeObserver = null
+    }
     this.unbindWrapEvents()
     this.unbindFullscreen()
     if (this.chart) {
@@ -320,6 +343,25 @@ export default {
     }
   },
   methods: {
+    // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径
+    calcSideInset() {
+      const width = this.chart ? this.chart.getWidth() : 0
+      return Math.round(width * this.sideRatio) + SIDE_GUTTER
+    },
+    // 覆盖 resize mixin：容器尺寸变化后除了重绘，还要重排用 px 定位的颜色图例
+    resize() {
+      if (!this.chart) return
+      this.chart.resize()
+      const left = this.calcSideInset()
+      // 宽度没变时不重复 setOption，避免连续拖拽缩放期间的无谓重绘
+      if (left === this._legendLeft) return
+      this._legendLeft = left
+      this.chart.setOption({ visualMap: { left }})
+    },
+    // 布局模式切换（宽屏 ↔ 窄屏）后重排：等 DOM 回流完成再取容器宽度
+    syncLegendPosition() {
+      this.$nextTick(() => this.resize())
+    },
     // 底座跟随主图：把主图当前的 zoom/center 原样写入底座的模型与坐标系。
     // 不用「转发相对增量」：两层 viewRect 有 layoutCenter 偏移，相同的 dx/dy/zoom 增量
     // 在各自投影下算出的 center 有微小差异，会随缩放累积放大导致底座漂移。
@@ -591,9 +633,10 @@ export default {
       const hasColor = values.length > 0
       const min = hasColor ? Math.min(...values) : 0
       const max = hasColor ? Math.max(...values) : 0
-      // 全屏时左右浮层消失，图例贴边；否则对齐左侧浮层右缘（12 + 465 + 12）
-      // 全屏后左右浮层仍在（全屏作用于页面容器），图例保持对齐左侧浮层右缘：12 + 465 + 12
-      const legendLeft = 489
+      // 图例左缘对齐「左侧浮层右缘 + 间距」：按容器宽度百分比动态计算，不再写死 px
+      // （echarts 的 left 不支持 calc，故由 sideRatio × 容器宽 + 间距 得出）
+      const legendLeft = this.calcSideInset()
+      this._legendLeft = legendLeft
 
       const option = {
         tooltip: {
@@ -891,23 +934,24 @@ export default {
     color: #fff;
   }
 
-  /* 浮层避开父级左右悬浮栏（各 465px + 12 边距 + 12 间距 = 489px），对齐原型位置 */
+  /* 浮动菜单避让父级左右浮层：--map-side-inset 由父级下发
+     （宽屏 = 浮层占比 + 间距，如 calc(25% + 12px)；窄屏 = 仅间距），随页面宽度动态变化 */
   &__panel--build {
-    /* 时间控件（工具条右缘 489px）正下方 */
-    top: 60px;
-    right: 489px;
+    /* 宽屏落在顶部工具条（月份选择器）下方，窄屏工具条在文档流中，由父级改为贴边 */
+    top: var(--map-panel-top, 60px);
+    right: var(--map-side-inset, 12px);
   }
 
   &__panel--subsidy {
-    right: 489px;
-    bottom: 12px;
+    right: var(--map-side-inset, 12px);
+    bottom: var(--panel-gutter, 12px);
   }
 
-  /* 颜色图例由 echarts visualMap 绘制在画布左下角（left: 489px / 全屏 12px） */
+  /* 颜色图例由 echarts visualMap 绘制在画布左下角（left = --map-side-inset） */
   &__panel--legend {
-    /* 电价菜单排在 visualMap 右侧（489 + 图例约 48 宽 + 8 间距） */
-    left: 545px;
-    bottom: 12px;
+    /* 电价菜单排在 visualMap 右侧：让位宽度 + 图例宽 48 + 间距 8 */
+    left: calc(var(--map-side-inset, 12px) + 56px);
+    bottom: var(--panel-gutter, 12px);
     display: flex;
     flex-direction: row;
     align-items: flex-end;
@@ -1027,11 +1071,11 @@ export default {
     }
   }
 
-  /* 底部中间：全屏 / 退出全屏 */
+  /* 底部中间：全屏 / 退出全屏（左右浮层等宽，容器中点即可视区中点） */
   &__fs-bar {
     position: absolute;
     left: 50%;
-    bottom: 12px;
+    bottom: var(--panel-gutter, 12px);
     transform: translateX(-50%);
     z-index: 10;
     display: flex;

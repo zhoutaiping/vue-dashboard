@@ -1,5 +1,5 @@
 <template>
-  <div class="home-overview">
+  <div class="home-overview" :class="{ 'home-overview--narrow': isNarrow }">
     <div class="home-overview__body">
       <!-- 地图铺满底层 -->
       <div class="home-overview__map">
@@ -7,6 +7,7 @@
           :points="visiblePoints"
           :categories="pointCategories"
           :field-map="POINT_FIELD_MAP"
+          :side-ratio="mapSideRatio"
           :region-tooltip-data="provincePriceMap"
           :capitals="capitals"
           :capital-icon="capitalIcon"
@@ -195,6 +196,14 @@ import {
 } from './config'
 import provinceIcon from '../province.svg'
 
+// 窄屏布局阈值（px，按页面主体宽度判定）：小于该宽度切换为「左栏 → 地图 → 右栏」纵向排布
+// 宽屏模式下左右浮层各占 25%，阈值取 1280 可保证浮层最窄仍有 ~320px，图表不小于可用宽度
+const NARROW_LAYOUT_WIDTH = 1280
+
+// 左右浮层宽度占比（与样式里的 --panel-width: 25% 保持一致）
+// 宽屏下传给地图组件，用于计算浮动菜单/颜色图例的让位宽度；窄屏无浮层遮挡，传 0
+const PANEL_WIDTH_RATIO = 0.25
+
 /**
  * 首页总览容器
  * 唯一的数据请求入口：所有子组件只接收 props、抛出事件，不直接请求接口
@@ -262,10 +271,21 @@ export default {
       pointCategories: POINT_CATEGORIES,
       // 省会标记点 + 图标
       capitals: PROVINCE_CAPITALS,
-      capitalIcon: provinceIcon
+      capitalIcon: provinceIcon,
+      // 页面主体宽度（动态检测，驱动宽屏/窄屏布局切换）
+      // 初值取窗口宽度做兜底，避免小屏首帧先按宽屏渲染再跳变；mounted 后以真实容器宽度为准
+      pageWidth: typeof window !== 'undefined' ? window.innerWidth : 0
     }
   },
   computed: {
+    // 窄屏：页面主体宽度不足，切换为纵向排布
+    isNarrow() {
+      return this.pageWidth > 0 && this.pageWidth < NARROW_LAYOUT_WIDTH
+    },
+    // 地图浮动菜单的让位比例：宽屏让开左右浮层，窄屏地图通栏无需让位
+    mapSideRatio() {
+      return this.isNarrow ? 0 : PANEL_WIDTH_RATIO
+    },
     // 多选分类 → 刷新键组成部分：空数组 = 全部（'all'），否则逗号拼接的 id 串
     categoryParam() {
       return (this.query.categories || []).join(',') || 'all'
@@ -486,8 +506,9 @@ export default {
             // 补贴类型名与 station_type 图标 key 一致（无补贴/有补贴/合规清单）
             categoryName: cat.name,
             subsidy: cat.name,
-            // 接口未返回项目状态，兜底默认保证右上角筛选不误过滤
-            status: item.status || '在建'
+            // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），
+            // 这里不做「在建」兜底——兜底会让所有点在只勾选「显示运营」时被前端二次过滤掉
+            status: item.status || ''
           }))
         })
       })
@@ -566,8 +587,13 @@ export default {
           const cityRegion = cityRegionName(province, p.cityName)
           if (cityRegion && cityRegion !== region) return false
         }
-        return (this.buildFilter.length === 0 || this.buildFilter.includes(p.status)) &&
-          this.subsidyFilter.includes(p.categoryName)
+        // 状态筛选：点位未带状态时一律展示。
+        // 状态维度已由请求入参 status（由 buildFilter 推导）在服务端过滤，
+        // 前端再按缺失字段判断会把整批点位误删（曾表现为「有 projectList 但地图无点」）
+        const statusOk = !p.status ||
+          this.buildFilter.length === 0 ||
+          this.buildFilter.includes(p.status)
+        return statusOk && this.subsidyFilter.includes(p.categoryName)
       })
     },
     // 区域悬浮浮层数据（交互8）：区域名 → 电价汇总 + 项目数
@@ -668,7 +694,30 @@ export default {
   created() {
     this.fetchAll()
   },
+  mounted() {
+    this.measurePageWidth()
+    // 窗口缩放 / 侧边栏展开收起：重新测量
+    window.addEventListener('resize', this.measurePageWidth)
+    // 容器宽度变化（侧边栏折叠动画、split 拖拽等 window resize 覆盖不到的场景）
+    if (typeof ResizeObserver !== 'undefined' && this.$el) {
+      this._resizeObserver = new ResizeObserver(this.measurePageWidth)
+      this._resizeObserver.observe(this.$el)
+    }
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.measurePageWidth)
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect()
+      this._resizeObserver = null
+    }
+  },
   methods: {
+    // 动态检测页面宽度：写入 pageWidth 驱动布局切换
+    // 只在数值变化时赋值，避免 ResizeObserver 回调反复写同一值
+    measurePageWidth() {
+      const width = this.$el ? this.$el.clientWidth : 0
+      if (width && width !== this.pageWidth) this.pageWidth = width
+    },
     // 统一请求：单个接口失败不影响其他模块
     async safeRequest(fn, defaultValue) {
       try {
@@ -938,16 +987,19 @@ export default {
       }
     },
     // 点位点击：详情卡片由地图组件弹出，此处请求项目详情接口并回传给卡片
-    // 入参 { industry, month, projectCode, status }（status 由点位自身状态映射：1在建 2运营）
+    // 入参 { industry, month, projectCode, status }（1在建 2运营 3在建和运营 4未选择）
     async handlePointClick(point) {
       this.pointDetail = null
       this.pointDetailLoading = true
+      // 点位自带状态优先；没有状态（真实接口不返回）则沿用当前全局筛选，
+      // 「未选择」不能直接下传 4，按「在建+运营」处理，否则可能查不到该项目
+      const globalStatus = this.statusParam === '4' ? '3' : this.statusParam
       const detail = await this.safeRequest(() => queryProjectDetail({
         // industry 统一传数组（接口不收字符串）：无行业信息时传空数组 = 全部
         industry: point.industry ? [point.industry] : [],
         month: this.query.month,
         projectCode: point.projectCode,
-        status: STATUS_PARAM_MAP[point.status] || '3'
+        status: (point.status && STATUS_PARAM_MAP[point.status]) || globalStatus
       }), null)
       this.pointDetail = detail
       this.pointDetailLoading = false
@@ -977,6 +1029,15 @@ export default {
   box-sizing: border-box;
   overflow: hidden;
 
+  /* 左右浮层尺寸基准：宽度各占页面主体 25%，与工具条/浮层间距共用 12px。
+     工具条的左右内缩、浮层宽度、地图内浮动菜单的让位都取自这里，改一处即可联动 */
+  --panel-width: 25%;
+  --panel-gutter: 12px;
+  /* 地图内浮动菜单的左右让位：让开左右浮层（25% + 间距），随页面宽度百分比缩放 */
+  --map-side-inset: calc(var(--panel-width) + var(--panel-gutter));
+  /* 右上角状态筛选的顶部位置：宽屏落在工具条（月份选择器）下方 */
+  --map-panel-top: 60px;
+
   /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
   &:fullscreen {
     height: 100vh;
@@ -1001,10 +1062,10 @@ export default {
   /* 顶部悬浮工具条：位于左右浮层之间，左右两列布局 */
   &__toolbar {
     position: absolute;
-    top: 12px;
-    /* 对齐加宽后的左右浮层（12 + 465 宽 + 12 间距） */
-    left: 489px;
-    right: 489px;
+    top: var(--panel-gutter);
+    /* 让开左右浮层：浮层宽度（25%）+ 间距，跟随浮层宽度自适应 */
+    left: calc(var(--panel-width) + var(--panel-gutter));
+    right: calc(var(--panel-width) + var(--panel-gutter));
     z-index: 11;
     display: flex;
     align-items: flex-start;
@@ -1031,11 +1092,11 @@ export default {
     }
   }
 
-  /* 左右统计面板浮在地图两侧 */
+  /* 左右统计面板浮在地图两侧：宽 25%、高铺满页面主体（100%） */
   &__col {
     position: absolute;
-    top: 12px;
-    bottom: 12px;
+    top: 0;
+    bottom: 0;
     z-index: 10;
     display: flex;
     flex-direction: column;
@@ -1057,8 +1118,8 @@ export default {
     }
 
     &--left {
-      left: 12px;
-      width: 465px;
+      left: 0;
+      width: var(--panel-width);
       border-radius: 12px;
       background-color: rgba(255,255,255,1);
       box-shadow: 0px 0px 16px 0px rgba(0,0,0,0.05);
@@ -1068,19 +1129,19 @@ export default {
     }
 
     &--right {
-      right: 12px;
-      width: 465px;
-      gap: 12px;
+      right: 0;
+      width: var(--panel-width);
+      gap: var(--panel-gutter);
       .panel-card {
         border-radius: 12px;
         background-color: rgba(255,255,255,1);
         box-shadow: 0px 0px 16px 0px rgba(0,0,0,0.05);
         font-family: Arial-regular;
       }
-      /* 低分辨率（1080P）兼容：运营项目情况面板不压缩（保最小高度），
-         高度不足时由列滚动条承载，避免指标/图表被裁切遮挡 */
+      /* 低分辨率（1080P）兼容：运营项目情况面板只保一个可用下限，
+         不被压成 0；内容超出由面板自身滚动承载（见底部 .summary-card），不顶出整列 */
       .summary-card {
-        min-height: 430px;
+        min-height: 200px;
       }
     }
   }
@@ -1120,6 +1181,88 @@ export default {
     text-align: left;
     font-family: PingFangSC-regular;
   }
+
+  /* ==================== 窄屏自适应 ====================
+     页面主体宽度不足时（由 JS 动态检测 < NARROW_LAYOUT_WIDTH）：
+     取消左右悬浮浮层，主体改为纵向文档流，按「工具条 → 左栏 → 地图 → 右栏」排列，
+     整页滚动；图表由各自的 ResizeObserver 跟随容器缩放，报表比例不被挤压变形 */
+  &--narrow {
+    /* 窄屏地图通栏，浮动菜单只需常规间距，且顶部无工具条遮挡 */
+    --map-side-inset: var(--panel-gutter);
+    --map-panel-top: var(--panel-gutter);
+
+    .home-overview__body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--panel-gutter);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* 工具条脱离绝对定位，排在最前 */
+    .home-overview__toolbar {
+      position: relative;
+      top: auto;
+      left: auto;
+      right: auto;
+      order: 1;
+      flex-shrink: 0;
+    }
+
+    /* 左右浮层：回到文档流，宽度铺满、高度随内容，滚动交给页面主体 */
+    .home-overview__col {
+      position: relative;
+      top: auto;
+      right: auto;
+      bottom: auto;
+      left: auto;
+      z-index: auto;
+      width: 100%;
+      overflow: visible;
+      flex-shrink: 0;
+
+      &--left {
+        order: 2;
+        overflow: visible;
+      }
+
+      &--right {
+        order: 4;
+      }
+
+      /* 浮层内部不再二次滚动，全部由页面主体滚动承载 */
+      .home-overview__left-scroll {
+        overflow: visible;
+      }
+
+      /* 排名列表在整页流里按内容撑开，不继承浮动层的 100% 高度约束 */
+      .rank-list {
+        height: auto;
+      }
+    }
+
+    /* 地图脱离铺底，按中间层插入，并给出固定高度：
+       避免 flex 拉伸/压缩导致地图比例失真的同时保持可滚动 */
+    .home-overview__map {
+      position: relative;
+      top: auto;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      order: 3;
+      flex-shrink: 0;
+      height: 60vh;
+      min-height: 360px;
+      max-height: 560px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* 整页纵向排布后不需要额外占位高度，按内容自然撑开 */
+    .summary-card {
+      min-height: 0;
+    }
+  }
 }
 
 /* 项目情况卡片右上角能源类型切换（el-button-group 分段样式） */
@@ -1143,12 +1286,32 @@ export default {
   ::v-deep .panel-card__body {
     display: flex;
     flex-direction: column;
+    /* 矮屏（1080P 及以下）指标 + 图表超出卡片高度时在本模块内滚动，
+       不再被 panel-card 的 overflow: hidden 裁切掉图表 */
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    /* 滚动条默认不出现，hover 时显示细滚动条（与左右浮层一致） */
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 2px;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(144, 147, 153, 0.4);
+    }
   }
 
   .hours-chart {
     flex: 1;
     min-height: 150px;
     margin-top: 8px;
+    /* 滚动容器内不被压缩到 0，保证图表始终可读 */
+    flex-shrink: 0;
   }
 }
 
