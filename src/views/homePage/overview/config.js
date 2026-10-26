@@ -48,6 +48,11 @@ export const CATEGORIES = [
 // 行业"全部"标识（industryNum 第一项）
 export const INDUSTRY_ALL = '全部'
 
+// 「能源电力」行业 id：运营项目情况的类型选项与默认值由它决定
+// 选中行业包含能源电力（含「全部」）→ 风电/光伏/非标三项，默认风电；
+// 不包含能源电力 → 仅非标一项，默认非标
+export const POWER_CATEGORY_ID = 'power'
+
 // 地图状态筛选（多选集合）→ 项目总览接口 status 参数
 // 接口枚举：1在建; 2运营; 3在建和运营; 4未选择（key 为筛选集合排序后逗号拼接）
 export const STATUS_PARAM_MAP = {
