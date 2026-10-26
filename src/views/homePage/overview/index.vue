@@ -23,6 +23,8 @@
           :price-type.sync="priceType"
           :province-data="provincePrices"
           :map-code="mapCode"
+          :region="mapRegion"
+          :region-cities="regionCityNames"
           :fullscreen-icons="fullscreenIcons"
           @region-click="handleRegionClick"
           @back="handleMapBack"
@@ -179,6 +181,10 @@ import {
   PROVINCE_LIST,
   provinceShortName,
   findProvince,
+  findRegion,
+  normalizeRegionName,
+  REGION_META,
+  DRILL_REGION_AS_PROVINCE_NAME,
   toCoordNumber,
   cityRegionName,
   REGION_SPLIT,
@@ -271,8 +277,9 @@ export default {
       if (sel.length) return sel
       return (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
     },
-    // 报表刷新键：影响全部报表接口入参的条件（月份/行业/状态/下钻层级）
+    // 报表刷新键：影响全部报表接口入参的条件（月份/行业/状态/下钻层级/区域）
     // 用于替代 query 深监听，避免无关字段（如排名维度）触发全量请求
+    // regionName 必须进 key：否则点蒙西、点蒙东都是「内蒙古」层级，不会重新取数
     reportKey() {
       return [
         this.query.month,
@@ -280,26 +287,37 @@ export default {
         this.statusParam,
         this.query.level,
         this.query.provinceCode,
+        this.query.regionName,
         this.query.cityCode
       ].join('|')
     },
     // 当前下钻省份的接口全称（山东省/内蒙古自治区），全国层级为空
+    // 按 provinceCode 反查而不是取 levels 末项：区域下钻后末项是「蒙西」，按名称反查会失败
     currentProvinceFullName() {
       if (this.query.level !== 'province') return ''
+      const hit = PROVINCE_LIST.find(p => p.code === this.query.provinceCode)
+      if (hit) return hit.full
+      // 兜底：code 缺失时按层级名称反查
       const name = (this.levels[this.levels.length - 1] || {}).name || ''
-      const hit = findProvince(name)
-      return hit ? hit.full : name
+      const legacy = findProvince(name)
+      return legacy ? legacy.full : name
+    },
+    // 下钻接口的 provinceName 传值：拆分区域下钻时按配置传区域名或省全称
+    drillProvinceParam() {
+      const region = this.query.regionName
+      if (!region) return this.currentProvinceFullName
+      return DRILL_REGION_AS_PROVINCE_NAME ? region : this.currentProvinceFullName
     },
     // 全局报表请求参数（单一来源，所有报表接口共用这 4 个字段）
     // industry: 行业类型（单选），全部传空字符串
     // month: 查询月份 yyyy-MM
-    // provinceName: 省份（下钻省份的接口全称），空=全国
+    // provinceName: 省份（下钻省份的接口全称）或拆分区域名，空=全国
     // status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
     reportParams() {
       return {
         industry: this.industryParam,
         month: this.query.month || '',
-        provinceName: this.currentProvinceFullName,
+        provinceName: this.drillProvinceParam,
         status: this.statusParam
       }
     },
@@ -478,20 +496,20 @@ export default {
         return { name, value: num }
       }
       if (this.query.level === 'country') {
-        return this.provinceGroups
-          .map(group => {
-            // 优先取分组级省名（省名 key 归一化时已补齐），项目内长地名（"内蒙古自治区阿拉善左旗…"）作兜底
-            const name = provinceShortName(group.provinceName ||
-              ((group.projectList || [])[0] || {}).provinceName || '')
-            return toDatum(name, group)
-          })
+        // 全国层级：后端按区域返回（蒙西/蒙东、冀北/河北南网），区域的汇总电价直接取分组字段，
+        // 与其它省份走同一套取值逻辑；countryGroups 已剔除被区域替换掉的整省分组
+        return this.countryGroups
+          .map(group => toDatum(this.resolveGroupName(group), group))
           .filter(d => d && d.name)
       }
-      // 省份下钻：mapDisplay 返回 cityPriceList（名称与地图区域一致，请求不按区域拆分）
-      // 拆分省份（内蒙古/河北）按业务区域分类着色：同一区域所有城市取该区域均价，同区域同色；
-      // 其它省份仍按市区粒度逐城着色
+      // 省份下钻：mapDisplay 返回 cityPriceList（名称与地图区域一致）
       const group = this.provinceGroups[0] || {}
-      const cities = Array.isArray(group.cityPriceList) ? group.cityPriceList : []
+      const cities = this.regionCityList(group)
+      // 已下钻到具体区域（蒙西/蒙东等）：地图只画本区域地市，按城市粒度逐城着色
+      if (this.query.regionName) {
+        return cities.map(c => toDatum(c.name, c)).filter(d => d && d.name)
+      }
+      // 整省下钻（如从排名进入）：拆分省份按业务区域着色，同一区域同色；其它省份逐城着色
       const regionAvg = this.regionAvgMap(cities, option.fields)
       return cities
         .map(c => {
@@ -503,6 +521,18 @@ export default {
         })
         .filter(d => d && d.name)
     },
+    // 全国层级生效的数据分组：后端同时返回「内蒙古/河北」和「蒙西/蒙东/冀北/河北南网」时，
+    // 用区域分组替换整省分组，避免同一块区域出现两个数据源（区域优先）
+    countryGroups() {
+      const groups = this.provinceGroups || []
+      const splitProvinces = groups
+        .map(group => normalizeRegionName(this.rawGroupName(group)))
+        .filter(Boolean)
+        .map(regionName => (REGION_META[regionName] || {}).province)
+        .filter(Boolean)
+      if (!splitProvinces.length) return groups
+      return groups.filter(group => splitProvinces.indexOf(this.rawGroupName(group)) < 0)
+    },
     // 当前下钻省份的短名（内蒙古/河北…），用于地区分类映射；全国视图为空
     currentProvinceShort() {
       if (this.query.level !== 'province') return ''
@@ -510,23 +540,35 @@ export default {
       if (hit) return hit.name
       return provinceShortName((this.levels[this.levels.length - 1] || {}).name || '')
     },
-    // 地图点位：按右上角状态筛选 + 右下角补贴属性筛选（均为多选）
-    // 状态筛选未勾选时展示全量（在建 + 运营），勾选后仅显示对应状态（原型注5）
+    // 地图点位：按区域 + 右上角状态筛选 + 右下角补贴属性筛选（均为多选）
+    // 区域下钻时接口若按省返回，这里再按地市过滤一遍；后端已按区域返回时该过滤不改变结果
     visiblePoints() {
-      return this.points.filter(p =>
-        (this.buildFilter.length === 0 || this.buildFilter.includes(p.status)) &&
-        this.subsidyFilter.includes(p.categoryName)
-      )
+      const region = this.query.regionName
+      const province = this.currentProvinceShort
+      return this.points.filter(p => {
+        if (region) {
+          const cityRegion = cityRegionName(province, p.cityName)
+          if (cityRegion && cityRegion !== region) return false
+        }
+        return (this.buildFilter.length === 0 || this.buildFilter.includes(p.status)) &&
+          this.subsidyFilter.includes(p.categoryName)
+      })
     },
     // 区域悬浮浮层数据（交互8）：区域名 → 电价汇总 + 项目数
-    // 全国视图按省聚合；省份下钻按市区粒度（cityPriceList）
-    // 拆分省份（内蒙古/河北）同区域城市合并为一条区域数据（电价取均值、项目数求和），
-    // 与地图按区域分类着色保持一致；其它省份按城市原样展示
+    // 全国视图按省/区域聚合；省份下钻按市区粒度（cityPriceList）
+    // 整省下钻时拆分省份同区域城市合并为一条区域数据（电价取均值、项目数求和）；
+    // 已下钻到具体区域时按城市原样展示，与逐城着色保持一致
     provincePriceMap() {
       const map = {}
       if (this.query.level === 'province') {
         const group = this.provinceGroups[0] || {}
-        const cities = Array.isArray(group.cityPriceList) ? group.cityPriceList : []
+        const cities = this.regionCityList(group)
+        if (this.query.regionName) {
+          cities.forEach(c => {
+            map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
+          })
+          return map
+        }
         const buckets = {}
         cities.forEach(c => {
           const region = cityRegionName(this.currentProvinceShort, c.name)
@@ -546,28 +588,25 @@ export default {
         })
         return map
       }
-      this.provinceGroups.forEach(group => {
-        // 优先取分组级省名（省名 key 归一化时已补齐），项目内长地名作兜底
-        const name = provinceShortName(group.provinceName ||
-          ((group.projectList || [])[0] || {}).provinceName || '')
-        const entry = Object.assign({ projectCount: (group.projectList || []).length }, group)
-        // 分区数据（蒙西/蒙东、冀北/河北南网）：全国地图按地市展示分区，
-        // 浮层需能按分区名与地市名（短名）取到该分区数据
-        const prov = regionProvinceShort(name)
-        if (prov) {
-          const data = Object.assign({ _regionName: name }, entry)
-          map[name] = data
-          const hit = (REGION_SPLIT[prov] || []).find(g => g.name === name)
-          ;((hit && hit.cities) || []).forEach(c => { map[c] = data })
-          return
-        }
-        map[name] = entry
+      this.countryGroups.forEach(group => {
+        // 省名 / 区域名统一归一（区域优先，含别名）
+        const name = this.resolveGroupName(group)
+        map[name] = Object.assign({ projectCount: (group.projectList || []).length }, group)
       })
       return map
     },
-    // 地图当前区域：省级下钻时传省份 code，驱动地图切换为该省区县地图
+    // 地图当前区域：省级下钻时传省份 code，驱动地图切换为该省地市地图
     mapCode() {
       return this.query.level === 'province' ? (this.query.provinceCode || '') : ''
+    },
+    // 地图当前业务区域：非拆分省份为空，组件据此再过滤一层地市面
+    mapRegion() {
+      return this.query.level === 'province' ? (this.query.regionName || '') : ''
+    },
+    // 当前区域包含的地市名（组件过滤省份 GeoJSON 用）
+    regionCityNames() {
+      const region = findRegion(this.query.regionName)
+      return region ? region.cities : []
     },
     // 电价菜单（左下角）：全国视图提供全部维度（含标杆电价）；
     // 下钻到省后无市区级标杆数据，菜单去掉标杆电价
@@ -736,11 +775,17 @@ export default {
     handleRankTypeChange(value) {
       this.query.rankType = value
     },
-    // 点击排名：全国→省（省内接口不返回城市 code，省→市下钻暂不支持）
+    // 点击排名：全国→省；已下钻到拆分省份时，点击区域名可在区域间切换
     handleRankClick(row) {
       if (this.query.level === 'country') {
         if (!row.code) return
         this.drillToProvince(row.code, row.name)
+        return
+      }
+      // 省内：排名数据按区域返回（蒙西/蒙东、冀北/河北南网）时，点击即切到该区域
+      const region = findRegion(row.name)
+      if (region && region.code === this.query.provinceCode && region.name !== this.query.regionName) {
+        this.drillToProvince(region.code, region.province, region.name)
       }
     },
     drillToProvince(code, name, region = '') {
@@ -752,21 +797,51 @@ export default {
       }
       this.query.level = 'province'
       this.query.provinceCode = code
+      // 区域下钻：记录业务区域，驱动地图只画该区域地市、接口按区域取数
+      this.query.regionName = region || ''
       this.query.cityCode = ''
+      // 面包屑：全国 / 省 / 区域（区域层只在拆分省份下钻时出现）
       this.levels = [Object.assign({}, ROOT_LEVEL), { code, name }]
+      if (region) this.levels.push({ code: `${code}|${region}`, name: region })
       // 下钻后电价菜单不含标杆电价：清空该选中态，避免菜单项消失后仍按标杆电价着色
       if (this.priceType === 'benchmark') this.priceType = ''
     },
-    // 地图点击：按省份名（地图短名）反查字典下钻
+    // 地图点击：点的是拆分区域（蒙西/蒙东、冀北/河北南网）→ 下钻到区域；点的是省份 → 下钻到省
     handleRegionClick(payload) {
-      // 全国地图上拆分省（内蒙古/河北）已按地市展示分区（蒙西/蒙东、冀北/河北南网），
-      // 点击地市需映射回所属省下钻；其它省名直接匹配
-      const split = splitProvinceByCityName(payload.province)
-      const province = findProvince(split ? split.province : payload.province)
+      const region = findRegion(payload.province)
+      if (region) {
+        this.drillToProvince(region.code, region.province, region.name)
+        return
+      }
+      const province = findProvince(payload.province)
       if (!province) return
       if (this.query.level === 'country') {
         this.drillToProvince(province.code, province.name)
       }
+    },
+    // 分组原始名（区域名或省名）→ 地图区域名 / 省短名
+    // 优先级：分组级 provinceName，其次项目内 provinceName（长地名），兼容接口两种返回
+    rawGroupName(group) {
+      const name = (group && group.provinceName) ||
+        (((group && group.projectList) || [])[0] || {}).provinceName || ''
+      return provinceShortName(name)
+    },
+    // 分组名归一：拆分区域归一到地图区域名（含别名，如「冀南」→「河北南网」），其它为省短名
+    resolveGroupName(group) {
+      const short = this.rawGroupName(group)
+      return normalizeRegionName(short) || short
+    },
+    // 下钻层级的地市列表：区域下钻时只保留本区域的地市
+    // 后端按区域返回时该过滤不改变结果；按省返回时由前端过滤掉其它区域
+    regionCityList(group) {
+      const cities = Array.isArray(group && group.cityPriceList) ? group.cityPriceList : []
+      const region = this.query.regionName
+      if (!region) return cities
+      const province = this.currentProvinceShort
+      return cities.filter(c => {
+        const cityRegion = cityRegionName(province, c.name)
+        return !cityRegion || cityRegion === region
+      })
     },
     // 城市列表 → 各拆分区域的均价（电价取平均；0 也是有效结算价，仅不可解析/负值不参与）
     regionAvgMap(cities, fields) {
@@ -810,6 +885,7 @@ export default {
       }
       this.query.level = 'country'
       this.query.provinceCode = ''
+      this.query.regionName = ''
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
     },
