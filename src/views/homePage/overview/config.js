@@ -27,11 +27,13 @@ export const fullscreenIcon = {
   2: fullscreen2 // 退出
 }
 
-// 地图点位 / 右下角图例图标：station 三色图标（蓝=无补贴、橙=有补贴、绿=合规清单，与补贴分类一一对应）
+// 地图点位 / 右下角图例图标：station 三色图标（蓝=无补贴、橙=有补贴、绿=合规清单，与 POINT_CATEGORIES 一一对应）
+// 注意：图标颜色是画在图片里的，文件名与业务分类并不对应（station-2 是绿色、station-3 是橙色），
+// 这里按图片实际颜色映射，保证打点、图例、弹窗图钉三者同色
 export const station_type = {
-  '无补贴': station1,
-  '有补贴': station2,
-  '合规清单': station3
+  '无补贴': station1, // 蓝
+  '有补贴': station3, // 橙
+  '合规清单': station2 // 绿
 }
 
 // 行业定义（name 与接口 industry 字段一致；color 用于地图打点与图表，对齐原型配色）
@@ -91,6 +93,12 @@ export const POINT_CATEGORIES = [
   { id: 'subsidy', name: '有补贴', color: '#f5a623' },
   { id: 'compliance', name: '合规清单', color: '#2fc25b' }
 ]
+
+// 分类 id / 分类名 → 分类定义（color/name/id）
+// 地图打点、右下角图例、点击弹窗配色统一走这里，避免各处各写一套导致颜色不一致
+export function pointCategory(key) {
+  return POINT_CATEGORIES.find(c => c.id === key || c.name === key) || POINT_CATEGORIES[0]
+}
 
 // projectList 分类规则（业务口径）：
 //   无补贴：natProject != 1（含 0 / null / 空）
@@ -386,7 +394,7 @@ export function cityRegionName(provinceShortName, cityName) {
 }
 
 // 区域名别名：接口/历史数据可能用别的叫法，统一归一到与地图 GeoJSON properties.name 一致的名称
-// （china-region.json 由 scripts/build-split-map.js 生成，区域名取自 REGION_SPLIT）
+// （china.json 由 scripts/build-split-map.js 生成，区域名取自 REGION_SPLIT）
 const REGION_ALIAS = { 冀南: '河北南网', 河北南: '河北南网', 蒙西电网: '蒙西', 蒙东电网: '蒙东' }
 
 // 区域字典：区域名 → { name, province(省短名), provinceFull(接口全称), code(行政码), cities }

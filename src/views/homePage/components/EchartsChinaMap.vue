@@ -72,15 +72,20 @@
       alt=""
     >
 
-    <!-- 点位点击详情卡片（原型：白色卡片 + 行业主题色 tag/边框 + 更多>>；发电/非标两类字段不同） -->
+    <!-- 点位点击详情卡片（原型：白色卡片 + 更多>>；tag 文字为行业名、配色为补贴分类色；发电/非标两类字段不同） -->
     <div
       v-if="activePoint"
       class="echarts-china-map__point-card"
       :style="{ left: activePoint.x + 'px', top: activePoint.y + 'px', borderColor: pointCardColor }"
     >
-      <div class="echarts-china-map__point-card-tag" :style="{ background: pointCardColor }">{{ activePoint.raw.industry }}</div>
+      <!-- tag 底色随补贴分类色变化：用 CSS 变量下发，主体与右侧斜切角共用同一颜色 -->
+      <div
+        class="echarts-china-map__point-card-tag"
+        :style="{ '--point-card-color': pointCardColor }"
+      >{{ pointCardTag }}</div>
       <div class="echarts-china-map__point-card-head">
-        <img class="echarts-china-map__point-card-pin" :src="subsidyIcons[activePoint.raw.categoryName] || capitalIcon" alt="">
+        <img v-if="pointCardPin" class="echarts-china-map__point-card-pin" :src="pointCardPin" alt="">
+        <span v-else class="echarts-china-map__point-card-dot" :style="{ background: pointCardColor }" />
         <span class="echarts-china-map__point-card-title">{{ pointCardTitle }}</span>
         <span class="echarts-china-map__point-card-more" :style="{ color: pointCardColor }" @click="$emit('point-more', activePoint.raw)">更多&gt;&gt;</span>
       </div>
@@ -108,10 +113,10 @@
 import * as echarts from 'echarts'
 // 全国底图采用「分区版」GeoJSON：内蒙古拆成 蒙西/蒙东、河北拆成 冀北/河北南网
 // 由 scripts/build-split-map.js 生成（地市面多边形合并），properties.name 即区域名
-import chinaJson from '@/assets/maps/china-region.json'
+import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
-import { REGION_PRICE_COMPARE, POINT_CATEGORIES, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
+import { REGION_PRICE_COMPARE, CATEGORIES, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
@@ -204,12 +209,27 @@ export default {
       if (!this.mapCode) return 'china'
       return this.region ? `${this.mapCode}|${this.region}` : this.mapCode
     },
-    // 卡片主题色：按左下角补贴属性分类取色（原型：无补贴-蓝、有补贴-橙、合规清单-绿）
-    // tag 文字仍为项目一级类型（行业），颜色随补贴分类
-    pointCardColor() {
+    // 卡片所属补贴分类：与地图打点、右下角图例同一套口径（POINT_CATEGORIES + classifyProject）
+    activePointCategory() {
       const raw = (this.activePoint && this.activePoint.raw) || {}
-      const hit = POINT_CATEGORIES.find(c => c.id === raw.category || c.name === raw.categoryName)
-      return (hit && hit.color) || '#0088ff'
+      return pointCategory(raw.category || raw.categoryName)
+    },
+    // 卡片主题色（边框 / tag 底色 / 数值与链接文字）：与打点同色
+    pointCardColor() {
+      return this.activePointCategory.color
+    },
+    // 卡片标题左侧图钉：与右下角图例同一张 station 图标（无图标时退化为同色圆点）
+    pointCardPin() {
+      return this.subsidyIcons[this.activePointCategory.name] || ''
+    },
+    // tag 文字：项目一级类型（行业名，取值同 CATEGORIES 的 name）；接口可能给 id 或中文名，两种都兼容
+    // 注意：tag 的底色不走行业色，仍取补贴分类色（与打点、边框一致）
+    pointCardTag() {
+      const detail = this.pointDetail || {}
+      const nonStandard = detail.nonStandardDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      const raw = (this.activePoint && this.activePoint.raw) || {}
+      return nonStandard.projectType || power.projectType || raw.projectType || ''
     },
     // 是否非标项目（接口未返回时默认按发电项目展示点位原始字段）
     pointCardIsNonStandard() {
@@ -1064,21 +1084,42 @@ export default {
     padding: 10px 12px;
     background: #fff;
     border: 2px solid #f5a623;
-    border-radius: 8px;
+    border-radius: 0 8px 8px 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     font-size: 12px;
     color: #303133;
     z-index: 20;
   }
 
+  /* 项目类型 tag：定位在卡片顶部，骑在边框上（上半截在卡片外），不占卡片布局高度 */
   &__point-card-tag {
-    display: inline-block;
-    padding: 1px 8px;
-    margin-bottom: 6px;
-    background: #f5a623;
+    position: absolute;
+    top: -27px;
+    left: -2px;
+    height: 27px;
+    padding: 0 14px;
+    /* 颜色由模板内联的 --point-card-color 下发（补贴分类色），斜切角共用同一值 */
+    background: var(--point-card-color, #008cff);
     color: #fff;
-    border-radius: 3px;
-    font-size: 11px;
+    border-radius: 6px 10px 0 0;
+    font-size: 12px;
+    line-height: 27px;
+    white-space: nowrap;
+    z-index: 1;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: -10px;
+      width: 20px;
+      height: 27px;
+      background: var(--point-card-color, #008cff);
+      transform: skewX(25deg);
+      transform-origin: bottom;
+      border-radius: 0 6px 0 0;
+      z-index: -1;
+    }
   }
 
   &__point-card-head {
@@ -1092,6 +1133,14 @@ export default {
     width: 14px;
     height: 18px;
     object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  /* 无 station 图标时的同色圆点兜底（与打点、边框同色） */
+  &__point-card-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
     flex-shrink: 0;
   }
 

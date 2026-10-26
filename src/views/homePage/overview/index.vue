@@ -160,6 +160,7 @@ import {
   RANK_FIELD_MAP,
   POINT_FIELD_MAP,
   POINT_CATEGORIES,
+  pointCategory,
   classifyProject,
   ENERGY_LABELS,
   OVERVIEW_METRICS,
@@ -456,7 +457,7 @@ export default {
       this.provinceGroups.forEach(group => {
         (group.projectList || []).forEach(item => {
           const catId = classifyProject(item.natProject, item.compCatalog)
-          const cat = POINT_CATEGORIES.find(c => c.id === catId) || POINT_CATEGORIES[0]
+          const cat = pointCategory(catId)
           list.push(Object.assign({}, item, {
             id: item.projectCode,
             name: item.projectName,

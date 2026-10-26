@@ -409,6 +409,7 @@ module.exports = [
           nonStandardDetail: {
             projectName: `${province.name}东方低碳综合能源非标项目${tail}号`,
             projectCode: code,
+            projectType: "能源电力",
             actualController: `${province.name}市百色电力有限公司`,
             accessMethod: String(tail % 3 + 1), // 1自动 2手动 3接入
             productionTypes: String(tail1 % 3), // 生产及预警：0正常运行 1顺歌运行 2预警运行
