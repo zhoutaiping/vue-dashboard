@@ -656,12 +656,12 @@ export default {
       }
       this.fetchOperateDetail()
     },
-    // 层级切换时校正排名维度：省内接口的 rankingType 枚举不含"项目个数"
+    // 层级切换时兜底校正排名维度：当前维度不在新层级枚举内则回退到首项
+    // （正常路径已由 drillToProvince / handleMapBack 显式重置，这里只防枚举不匹配）
     'query.level'(level) {
       const options = level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
       if (!options.some(t => t.value === this.query.rankType)) {
-        this._suppressRankFetch = true
-        this.query.rankType = options[0].value
+        this.setRankType(options[0].value)
       }
     }
   },
@@ -808,7 +808,15 @@ export default {
       if (!this.energyTypeOptions.some(item => item.key === type)) return
       this.operateEnergyType = type
     },
+    // 排名维度 tabs 手动切换：只刷新排名，其它报表无需重取
     handleRankTypeChange(value) {
+      this.query.rankType = value
+    },
+    // 排名维度程序化写入（层级切换时重置）：由本批 fetchAll 统一取数，抑制单独请求
+    // 仅值真正变化时才置标记，否则 watch 不触发、标记残留会吞掉下一次正常切换
+    setRankType(value) {
+      if (value === this.query.rankType) return
+      this._suppressRankFetch = true
       this.query.rankType = value
     },
     // 点击排名：全国→省；已下钻到拆分省份时，点击区域名可在区域间切换
@@ -825,11 +833,10 @@ export default {
       }
     },
     drillToProvince(code, name, region = '') {
-      // 先校正排名维度（在 level 变化前）：保证本批请求携带正确的 rankingType，
-      // 否则 fetchAll 发请求时仍是旧维度，而 tabs 已切到新维度，展示与数据不一致
-      if (!REGION_RANK_TYPES.some(t => t.value === this.query.rankType)) {
-        this._suppressRankFetch = true
-        this.query.rankType = REGION_RANK_TYPES[0].value
+      // 从全国下钻到省份：排名维度重置为「达标率」（省内默认维度）
+      // 省内切换区域（蒙西↔蒙东等）不算重新下钻，保留用户当前维度
+      if (this.query.level === 'country') {
+        this.setRankType(REGION_RANK_TYPES[0].value)
       }
       this.query.level = 'province'
       this.query.provinceCode = code
@@ -914,11 +921,9 @@ export default {
     },
     // 地图「返回」：回到全国视图
     handleMapBack() {
-      // 先校正排名维度（在 level 变化前），保证本批请求携带正确的 rankingType
-      if (!RANK_TYPES.some(t => t.value === this.query.rankType)) {
-        this._suppressRankFetch = true
-        this.query.rankType = RANK_TYPES[0].value
-      }
+      // 返回全国：排名维度重置为「项目个数」（全国默认维度），在 level 变化前写入，
+      // 保证本批请求携带正确的 rankingType
+      this.setRankType(RANK_TYPES[0].value)
       this.query.level = 'country'
       this.query.provinceCode = ''
       this.query.regionName = ''
