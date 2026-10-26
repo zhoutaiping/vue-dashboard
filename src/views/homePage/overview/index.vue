@@ -307,7 +307,7 @@ export default {
       return DRILL_REGION_AS_PROVINCE_NAME ? region : this.currentProvinceFullName
     },
     // 全局报表请求参数（单一来源，所有报表接口共用这 4 个字段）
-    // industry: 行业类型（单选），全部传空字符串
+    // industry: 行业类型数组（多选），元素为行业名（能源电力/节能环保/智慧能源/绿色交通/其他），空数组=全部
     // month: 查询月份 yyyy-MM
     // provinceName: 省份（下钻省份的接口全称）或拆分区域名，空=全国
     // status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
@@ -326,7 +326,8 @@ export default {
         rankingType: this.query.rankType
       })
     },
-    // 多选行业 → 接口 industry 参数：全部（空数组）传空数组串 "[]"；选中项按行业名以 JSON 数组串传，如 ["能源电力","其他"]
+    // 多选行业 → 接口 industry 参数：始终传数组，不做字符串序列化
+    // 全部（未选/全选）→ []；选中若干行业 → ["能源电力","其他"]
     industryParam() {
       const sel = this.query.categories || []
       if (!sel.length) return []
@@ -900,7 +901,8 @@ export default {
       this.pointDetail = null
       this.pointDetailLoading = true
       const detail = await this.safeRequest(() => queryProjectDetail({
-        industry: point.industry || '',
+        // industry 统一传数组（接口不收字符串）：无行业信息时传空数组 = 全部
+        industry: point.industry ? [point.industry] : [],
         month: this.query.month,
         projectCode: point.projectCode,
         status: STATUS_PARAM_MAP[point.status] || '3'

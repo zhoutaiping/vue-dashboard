@@ -210,6 +210,21 @@ function ok(data) {
   return { code: 200, msg: 'success', data }
 }
 
+// 行业入参归一：接口只收数组（如 ["能源电力","其他"]，空数组=全部），
+// 这里同时兼容历史字符串形态（JSON 数组串 / 逗号串），统一输出为字符串数组
+function parseIndustry(raw) {
+  if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean)
+  const str = String(raw === undefined || raw === null ? '' : raw).trim()
+  if (!str) return []
+  if (str.charAt(0) === '[') {
+    try {
+      const arr = JSON.parse(str)
+      if (Array.isArray(arr)) return arr.map(s => String(s).trim()).filter(Boolean)
+    } catch (e) { /* 解析失败回退逗号串 */ }
+  }
+  return str.split(',').map(s => s.trim()).filter(Boolean)
+}
+
 module.exports = [
   // 项目总览（全国/省份）：POST /largeScreen/queryProjectOverview
   // 入参 { industry, month, provinceName, status }；返回 { constructionCount, operationCount, industryNum }
@@ -230,17 +245,8 @@ module.exports = [
       }))
       const totalCount = industryCounts.reduce((sum, item) => sum + item.projectCount, 0)
 
-      // 行业参数支持 JSON 数组串（["能源电力","其他"]）或逗号串；未指定行业取合计
-      const industries = (() => {
-        const raw = industry || ''
-        if (typeof raw === 'string' && raw.trim().charAt(0) === '[') {
-          try {
-            const arr = JSON.parse(raw)
-            if (Array.isArray(arr)) return arr.map(s => String(s).trim()).filter(Boolean)
-          } catch (e) { /* 解析失败回退逗号串 */ }
-        }
-        return String(raw).split(',').map(s => s.trim()).filter(Boolean)
-      })()
+      // 行业多选入参为数组；未指定行业（空数组）取合计
+      const industries = parseIndustry(industry)
       const allCount = industries.length
         ? industries.reduce((sum, name) => {
           const hit = industryCounts.find(i => i.industry === name) || { projectCount: 0 }
@@ -323,17 +329,8 @@ module.exports = [
     type: 'post',
     response: config => {
       const body = config.body || {}
-      // 行业筛选：空/'[]' = 全部；JSON 数组串（["能源电力","其他"]）或逗号串（与前端 industryParam 对应）
-      const industryFilter = (() => {
-        const raw = String(body.industry || '').trim()
-        if (raw.charAt(0) === '[') {
-          try {
-            const arr = JSON.parse(raw)
-            if (Array.isArray(arr)) return arr.map(s => String(s).trim()).filter(Boolean)
-          } catch (e) { /* 解析失败回退逗号串 */ }
-        }
-        return raw.split(',').filter(Boolean)
-      })()
+      // 行业多选入参为数组；空数组 = 全部（与前端 industryParam 对应）
+      const industryFilter = parseIndustry(body.industry)
       // 状态筛选：1在建 2运营 3在建和运营 4未选择（未选择 = 全部，原型注5）
       const status = String(body.status || '4')
       const matchProject = p => {

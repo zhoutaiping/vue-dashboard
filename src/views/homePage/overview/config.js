@@ -316,7 +316,10 @@ export const DEFAULT_QUERY = {
   provinceName: '',
   // 下钻到的业务区域（蒙西/蒙东、冀北/河北南网）；非拆分省份为空
   regionName: '',
-  category: 'all', // 行业单选：'all' = 全部（industry 传空字符串），其它为分类 id
+  // 行业多选：选中项 = 分类 id 数组；空数组 = 全部（industry 传空）
+  // 必须在默认查询里声明：Vue 2 对 data 中不存在的新增属性不做响应式转换，
+  // 否则 query.categories 赋值后不会触发 reportKey / categorySelection 重算，表现为行业多选不生效
+  categories: [],
   month: DEFAULT_MONTH,
   rankType: 'projectCount',
   energyType: 'wind' // 风电 / 光伏 / 非标

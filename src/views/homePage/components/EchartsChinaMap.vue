@@ -116,7 +116,7 @@ import * as echarts from 'echarts'
 import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
-import { REGION_PRICE_COMPARE, CATEGORIES, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
+import { REGION_PRICE_COMPARE, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
