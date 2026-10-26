@@ -911,12 +911,12 @@ export default {
       this.pointDetailLoading = false
     },
     // 卡片「更多>>」：跳转打开该项目对应的详情页面（原型交互13）
-    handlePointMore(point) {
-      this.$message.info(`跳转项目详情页：${point.projectCode || point.projectName || ''}`)
+    handlePointMore({ raw, detail }) {
+      this.$message.info(`跳转项目详情页：${raw.projectCode || raw.projectName || ''}`)
     },
     // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
-    handlePointDetail(point) {
-      this.$message.info(`跳转运营填报列表页：${point.projectCode || point.projectName || ''}`)
+    handlePointDetail({ raw, detail }) {
+      this.$message.info(`跳转运营填报列表页：${raw.projectCode || raw.projectName || ''}`)
     },
     handleMore() {
       this.$message.info('跳转项目清单页')

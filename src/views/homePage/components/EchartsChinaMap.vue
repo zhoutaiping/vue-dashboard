@@ -75,8 +75,10 @@
     <!-- 点位点击详情卡片（原型：白色卡片 + 更多>>；tag 文字为行业名、配色为补贴分类色；发电/非标两类字段不同） -->
     <div
       v-if="activePoint"
+      ref="pointCard"
       class="echarts-china-map__point-card"
       :style="{ left: activePoint.x + 'px', top: activePoint.y + 'px', borderColor: pointCardColor }"
+      @click.stop
     >
       <!-- tag 底色随补贴分类色变化：用 CSS 变量下发，主体与右侧斜切角共用同一颜色 -->
       <div
@@ -87,7 +89,7 @@
         <img v-if="pointCardPin" class="echarts-china-map__point-card-pin" :src="pointCardPin" alt="">
         <span v-else class="echarts-china-map__point-card-dot" :style="{ background: pointCardColor }" />
         <span class="echarts-china-map__point-card-title">{{ pointCardTitle }}</span>
-        <span class="echarts-china-map__point-card-more" :style="{ color: pointCardColor }" @click="$emit('point-more', activePoint.raw)">更多&gt;&gt;</span>
+        <span class="echarts-china-map__point-card-more" :style="{ color: pointCardColor }" @click="handlePointMore">更多&gt;&gt;</span>
       </div>
       <div v-if="pointDetailLoading" class="echarts-china-map__point-card-row is-loading">详情加载中...</div>
       <template v-else>
@@ -100,9 +102,9 @@
           <span :style="{ color: pointCardColor }">{{ row.value }}</span>
           <span v-if="row.sub" :style="{ color: pointCardColor }">{{ row.sub }}</span>
         </div>
-        <!-- 详情>>：仅发电项目展示（原型交互17：点击跳转运营填报列表页） -->
-        <div v-if="!pointCardIsNonStandard" class="echarts-china-map__point-card-footer">
-          <span class="echarts-china-map__point-card-detail" :style="{ color: pointCardColor }" @click="$emit('point-detail', activePoint.raw)">详情&gt;&gt;</span>
+        <!-- 详情>>：非标项目固定不展示；发电项目仅状态为运营(status='2')时展示 -->
+        <div v-if="pointCardCanShowDetail" class="echarts-china-map__point-card-footer">
+          <span class="echarts-china-map__point-card-detail" :style="{ color: pointCardColor }" @click="handlePointDetail">详情&gt;&gt;</span>
         </div>
       </template>
     </div>
@@ -242,6 +244,13 @@ export default {
       const power = detail.powerGenerationDetail || {}
       const raw = (this.activePoint && this.activePoint.raw) || {}
       return nonStandard.projectName || power.projectName || raw.projectName || ''
+    },
+    // 详情>>按钮显示条件：非标项目固定不展示；发电项目只有状态为运营(status='2')时才展示
+    pointCardCanShowDetail() {
+      if (this.pointCardIsNonStandard) return false
+      const detail = this.pointDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      return power.status === '2'
     },
     // 卡片行（原型交互13：发电项目与非标项目展示内容不一致）
     // 发电项目：实控人/装机容量/发电利用小时数(达标率)/结算电价/补贴电价
@@ -411,6 +420,15 @@ export default {
         if (this.activePoint) this.activePoint = null
       }
       if (this.$refs.wrap) this.$refs.wrap.addEventListener('mouseleave', this._onMapLeave)
+      // 点击卡片外部关闭弹窗（事件捕获阶段拦截，卡片内点击通过 @click.stop 阻止冒泡）
+      this._onDocClick = e => {
+        if (!this.activePoint) return
+        const card = this.$refs.pointCard
+        if (card && !card.contains(e.target)) {
+          this.activePoint = null
+        }
+      }
+      document.addEventListener('click', this._onDocClick, true)
     },
     // 解绑全局兜底事件（与 initChart 内绑定成对）
     unbindWrapEvents() {
@@ -422,9 +440,11 @@ export default {
         window.removeEventListener('scroll', this._onAnyScroll, true)
         window.removeEventListener('blur', this._onAnyScroll)
       }
+      if (this._onDocClick) document.removeEventListener('click', this._onDocClick, true)
       this._onDocMove = null
       this._onDocOut = null
       this._onAnyScroll = null
+      this._onDocClick = null
     },
     // 加载并注册当前层级的地图 GeoJSON（本地文件，webpack 动态 import 按需加载异步 chunk），成功后重绘
     //   mapKey = 'china'                 → 全国分区底图（模块级已注册）
@@ -841,6 +861,22 @@ export default {
         document.removeEventListener('fullscreenchange', this._onFsChange)
         this._onFsChange = null
       }
+    },
+    // 更多>>点击：提取详情数据并传递给父组件
+    handlePointMore() {
+      const detail = this.pointDetail || {}
+      const nonStandard = detail.nonStandardDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      const detailData = Object.keys(nonStandard).length > 0 ? nonStandard : power
+      this.$emit('point-more', { raw: this.activePoint.raw, detail: detailData })
+    },
+    // 详情>>点击：提取详情数据并传递给父组件
+    handlePointDetail() {
+      const detail = this.pointDetail || {}
+      const nonStandard = detail.nonStandardDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      const detailData = Object.keys(nonStandard).length > 0 ? nonStandard : power
+      this.$emit('point-detail', { raw: this.activePoint.raw, detail: detailData })
     }
   }
 }
@@ -1147,6 +1183,9 @@ export default {
   &__point-card-title {
     flex: 1;
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__point-card-more {

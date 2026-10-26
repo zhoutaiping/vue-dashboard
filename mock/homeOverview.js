@@ -406,12 +406,13 @@ module.exports = [
           nonStandardDetail: {
             projectName: `${province.name}东方低碳综合能源非标项目${tail}号`,
             projectCode: code,
-            projectType: "能源电力",
+            projectType: '能源电力',
             actualController: `${province.name}市百色电力有限公司`,
             accessMethod: String(tail % 3 + 1), // 1自动 2手动 3接入
             productionTypes: String(tail1 % 3), // 生产及预警：0正常运行 1顺歌运行 2预警运行
             productionCapacity: String(randomInt(6, 30, tail2)), // 项目规模
-            platformTransfer: tail3 % 2 === 0 ? '1' : '2' // 是否平台转发：1是 2否
+            platformTransfer: tail3 % 2 === 0 ? '1' : '2', // 是否平台转发：1是 2否
+            status: '1' // 项目状态：1、在建；2、运营
           },
           powerGenerationDetail: null
         })
@@ -428,7 +429,8 @@ module.exports = [
           hours: String(randomInt(80, 300, tail3)),
           rate: String(randomInt(70, 99, tail4)),
           editWindPrice: String(randomInt(20, 60, tail5) / 100),
-          subePrice: String(randomInt(5, 30, tail1) / 100)
+          subePrice: String(randomInt(5, 30, tail1) / 100),
+          status: tail % 3 === 0 ? '1' : '2' // 项目状态：1、在建；2、运营（偶数项目 2/3 概率运营）
         }
       })
     }
