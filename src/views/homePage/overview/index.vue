@@ -824,8 +824,12 @@ export default {
       const list = Array.isArray(data) ? data : []
       this.rankList = list.map(item => {
         const fullName = item.nameType || ''
-        const name = isCountry ? provinceShortName(fullName) : fullName
-        const province = isCountry ? findProvince(name) : null
+        // 拆分区域（蒙西/蒙东、冀北/河北南网）也可能出现在全国排名里：区域名不是省名，
+        // findProvince 查不到 code。这里统一成标准区域名（兼容「蒙西电网」之类别名），
+        // 区域行不带 code，下钻时由 handleRankClick 用 findRegion 解析
+        const region = isCountry ? findRegion(fullName) : null
+        const name = region ? region.name : (isCountry ? provinceShortName(fullName) : fullName)
+        const province = isCountry && !region ? findProvince(name) : null
         return {
           name,
           value: item.value,
@@ -954,9 +958,17 @@ export default {
       this._suppressRankFetch = true
       this.query.rankType = value
     },
-    // 点击排名：全国→省；已下钻到拆分省份时，点击区域名可在区域间切换
+    // 点击排名：全国→省/区域；已下钻到拆分省份时，点击区域名可在区域间切换
     handleRankClick(row) {
       if (this.query.level === 'country') {
+        // 全国排名里可能出现拆分区域（蒙西/蒙东、冀北/河北南网）：区域名不是省名，
+        // findProvince 拿不到 code，早前这里 `!row.code` 直接 return（表现为点了没反应）。
+        // 先按区域解析，命中就带着区域名下钻，与地图上点击该区域的行为完全一致
+        const region = findRegion(row.name)
+        if (region) {
+          this.drillToProvince(region.code, region.province, region.name)
+          return
+        }
         if (!row.code) return
         this.drillToProvince(row.code, row.name)
         return
