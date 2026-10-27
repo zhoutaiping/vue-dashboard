@@ -116,32 +116,33 @@ export default {
   &__item {
     padding: 4px 12px;
     font-size: 13px;
-    color: #606266;
-    background: #fff;
-    border: 1px solid #dcdfe6;
-    border-radius: 14px;
+    border-radius: 8px;
+    background-color: rgba(96,105,127,0.7);
+    color: rgba(255,255,255,1);
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
 
     &:hover {
-      color: #0088ff;
-      border-color: #b3d8ff;
+      color: #fff;
+      background-color: rgba(0,136,255,1);
+      color: rgba(255,255,255,1);
     }
 
     &.is-active:hover {
       color: #fff;
+      background-color: rgba(0,136,255,1);
+      color: rgba(255,255,255,1);
     }
 
     /* 置灰态：全部未全选时的"全部"，或已全选时的各行业 */
     &.is-muted {
-      color: #c0c4cc;
-      background: #f5f7fa;
-      border-color: #ebeef5;
+      background-color: rgba(96,105,127,0.7);
+      color: rgba(255,255,255,1);
 
       &:hover {
-        color: #909399;
-        border-color: #dcdfe6;
+        background-color: rgba(0,136,255,1);
+        color: rgba(255,255,255,1);
       }
     }
   }

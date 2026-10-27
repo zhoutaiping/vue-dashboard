@@ -130,9 +130,30 @@ export default {
         this.chart.resize()
       }
     },
-    // 轴名是否带百分比单位（如「达标率(%)」）：带 % 时按百分比显示刻度
-    isPercentAxis(name) {
-      return String(name || '').indexOf('%') > -1
+    // 轴名括号里的刻度单位：「利用小时数(h)」→ h、「达标率(%)」→ %、「单位：个」→ 无
+    // 只取 1~2 个字符的短单位拼到刻度上；「元/kWh」这类长单位仍只作轴名，避免刻度被撑长
+    axisUnit(name) {
+      const match = String(name || '').match(/[（(]([^)）]+)[)）]/)
+      if (!match) return ''
+      const unit = match[1].trim()
+      return unit.length > 0 && unit.length <= 2 ? unit : ''
+    },
+    // 刻度文案：短单位直接拼在数值后（100h / 40%），无单位则纯数值
+    tickFormatter(name) {
+      const unit = this.axisUnit(name)
+      return unit ? `{value}${unit}` : '{value}'
+    },
+    // tooltip 里的单位：优先取所属 Y 轴轴名括号内的单位（长单位也照用，如「元/kWh」）；
+    // 没有轴名时回退到顶栏 unit 文案（「单位：个」→「个」），都没有则不带单位
+    valueUnit(axisIndex) {
+      const match = String(this.yAxisNames[axisIndex] || '').match(/[（(]([^)）]+)[)）]/)
+      if (match) return match[1].trim()
+      if (axisIndex === 0 && this.unit) {
+        // 「单位：个」取冒号后的单位；直接传「个」这类纯单位时原样使用
+        const parts = String(this.unit).split(/[：:]/)
+        return (parts.length > 1 ? parts[1] : parts[0]).trim()
+      }
+      return ''
     },
     // 是否为整数轴（项目个数等）：是则禁止小数刻度，避免数据很小时出现 0.2/0.4 这类刻度
     isIntegerAxis(values) {
@@ -173,6 +194,12 @@ export default {
         .reduce((acc, s) => acc.concat(s.data || []), []))
       // 是否配置了轴名/单位：有则多留一行，避免轴名与图例贴字
       const hasAxisName = !!(this.yAxisNames[0] || this.yAxisNames[1])
+      // 顶栏布局：图例居中 + 右侧单位。容器过窄时（图例右缘会压到单位上）图例改为靠左，
+      // 再窄则同时缩小图例字号/间距，保证「图例 + 单位」在小屏右侧栏里也不相撞
+      // 380 / 340 为「3~4 项图例 + 单位」不重叠的经验阈值
+      const chartWidth = (this.chart && this.chart.getWidth()) || 0
+      const legendCentered = !this.chart || chartWidth >= 380
+      const legendCompact = chartWidth > 0 && chartWidth < 340
 
       const option = {
         color: this.colors,
@@ -195,7 +222,12 @@ export default {
                 ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:2px solid ${color};box-sizing:border-box;margin-right:6px;vertical-align:-1px;"></span>`
                 : `<span style="display:inline-block;width:12px;height:6px;border-radius:3px;background:${color};margin-right:6px;vertical-align:-1px;"></span>`
               const value = p.value == null ? '-' : p.value
-              return `<div style="margin-top:4px;">${marker}${p.seriesName}&nbsp;&nbsp;<b>${value}</b></div>`
+              // 单位跟随系列所在 Y 轴（柱=h/个、折线=%），与轴名/刻度保持同一口径
+              const unit = this.valueUnit((series[idx] && series[idx].yAxisIndex) || 0)
+              const unitHtml = unit && p.value != null
+                ? `<span style="color:#909399;margin-left:2px;">${unit}</span>`
+                : ''
+              return `<div style="margin-top:4px;">${marker}${p.seriesName}&nbsp;&nbsp;<b>${value}</b>${unitHtml}</div>`
             }).join('')
             return `<div style="font-weight:600;">${title}</div>${rows}`
           }
@@ -203,11 +235,12 @@ export default {
         legend: this.showLegend
           ? {
             top: 0,
-            left: 'center',
+            // 图例居中（顶栏视觉重心），单位贴右边缘收尾；窄面板下降级为靠左，避免压到单位
+            left: legendCentered ? 'center' : 0,
             icon: 'roundRect',
             itemWidth: 20,
             itemHeight: 10,
-            itemGap: 24,
+            itemGap: legendCompact ? 10 : 16,
             inactiveColor: '#c0c4cc',
             // 项目当前为 echarts 4.x，legend.data 不支持 itemStyle（5.1+ 才有）；
             // 折线圆点是白心填充（itemStyle.color=#fff），图例取系列填充色会渲染成白色不可见，
@@ -215,16 +248,18 @@ export default {
             data: this.buildLegendData(),
             // renderChart 是 notMerge 全量替换，需回填选中状态，避免图例切换被重置
             selected: Object.assign({}, this.legendSelected),
-            textStyle: { fontSize: 13, color: '#303133', fontWeight: 500 }
+            textStyle: { fontSize: legendCompact ? 12 : 13, color: '#303133', fontWeight: 500 }
           }
           : { show: false },
-        // 单位标签：与图例同一行、贴右边缘，灰字小一号（与轴名/刻度同一套灰阶，不抢图例）
+        // 单位标签：与图例同一行、贴右边缘，主题蓝 #08f（与数值同一套主色），小一号不抢图例
+        // lineHeight 与图例文字（13px，行高约 18）对齐，二者在同一基线上，顶栏才整齐；
+        // right 留 4px，避免贴边被裁
         graphic: this.unit
           ? [{
             type: 'text',
-            right: 0,
-            top: 4,
-            style: { text: this.unit, fill: '#909399', fontSize: 12, textVerticalAlign: 'middle' }
+            right: 4,
+            top: 0,
+            style: { text: this.unit, fill: '#08f', fontSize: 12, lineHeight: 18 }
           }]
           : undefined,
         // 顶部留白：图例 18 + 轴名一行 22（无轴名时不占这一行，把高度还给绘图区）
@@ -265,8 +300,8 @@ export default {
             axisLabel: {
               color: '#606266',
               fontSize: 12,
-              // 百分比轴（轴名含 %）刻度自带 % 后缀，避免出现 0.4/0.8 这种无单位数值
-              formatter: this.isPercentAxis(this.yAxisNames[0]) ? '{value}%' : '{value}'
+              // 刻度带单位（轴名括号内的短单位）：100h / 40%，避免出现无单位数值
+              formatter: this.tickFormatter(this.yAxisNames[0])
             }
           },
           {
@@ -284,7 +319,7 @@ export default {
             axisLabel: {
               color: '#909399',
               fontSize: 11,
-              formatter: this.isPercentAxis(this.yAxisNames[1]) ? '{value}%' : '{value}'
+              formatter: this.tickFormatter(this.yAxisNames[1])
             }
           }
         ],

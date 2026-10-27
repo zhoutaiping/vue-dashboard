@@ -54,7 +54,7 @@
             :clearable="false"
             value-format="yyyy-MM"
             placeholder="选择月份"
-            style="width: 120px; background-color: rgba(96, 105, 127, 0.7); opacity: 0.5;"
+            style="width: 120px;"
           />
         </div>
       </div>
@@ -103,7 +103,7 @@
             :series="manageTrend.series"
             :colors="MANAGE_COLORS"
             stack="total"
-            :y-axis-names="['单位：个', '']"
+            unit="单位：个"
             height="250px"
           />
         </PanelCard>
@@ -462,8 +462,8 @@ export default {
     // 统一写成「指标(单位)」：只写「小时」这类单位在图上会变成一个孤立小字，看不出是什么指标
     operateChartYAxis() {
       return this.operateEnergyType === 'nonstandard'
-        ? ['度电收入(元/kWh)', '达标率(%)']
-        : ['利用小时数(h)', '达标率(%)']
+        ? [] // ['度电收入(元/kWh)', '达标率(%)']
+        : [] // ['利用小时数(h)', '达标率(%)']
     },
     // 饼图配色按行业名匹配，与数据顺序解耦
     pieColors() {
@@ -490,8 +490,9 @@ export default {
       }
     },
     // 排名维度 tabs：全国 4 项（含项目个数），省内 3 项（接口枚举不同）
+    // 受行业筛选影响，见 rankOptionsFor
     rankTypeOptions() {
-      return this.query.level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
+      return this.rankOptionsFor(this.query.level)
     },
     currentRankUnit() {
       const target = this.rankTypeOptions.find(t => t.value === this.query.rankType)
@@ -700,7 +701,7 @@ export default {
     // 层级切换时兜底校正排名维度：当前维度不在新层级枚举内则回退到首项
     // （正常路径已由 drillToProvince / handleMapBack 显式重置，这里只防枚举不匹配）
     'query.level'(level) {
-      const options = level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
+      const options = this.rankOptionsFor(level)
       if (!options.some(t => t.value === this.query.rankType)) {
         this.setRankType(options[0].value)
       }
@@ -856,6 +857,24 @@ export default {
     setCategories(list) {
       this.query.categories = list
       this.resetEnergyType()
+      // 行业变化会改变排名可选维度（不含能源电力时只剩达标率），需要同步校正
+      this.ensureRankTypeAvailable()
+    },
+    // 某层级下的排名维度候选（rankTypeOptions 的计算来源）：
+    // 「全部」或包含「能源电力」→ 该层级完整维度；
+    // 只选其它行业（节能环保/智慧能源/绿色交通/其他）→ 装机容量/利用小时数/项目个数
+    // 与该行业口径不匹配，排名只剩「达标率」（接口枚举 rate）
+    rankOptionsFor(level) {
+      const types = level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
+      return this.hasPowerIndustry ? types : types.filter(t => t.value === 'rate')
+    },
+    // 排名维度校正：当前维度不在可选列表内则回退到首项
+    // （不含能源电力时首项即「达标率」）。由本批 fetchAll 统一取数，
+    // setRankType 会置 _suppressRankFetch，避免多发一次 fetchRank
+    ensureRankTypeAvailable() {
+      const options = this.rankTypeOptions
+      if (!options.length || options.some(t => t.value === this.query.rankType)) return
+      this.setRankType(options[0].value)
     },
     // 行业切换 → 重置运营类型：含能源电力取风电，不含取非标
     // 该重置由本批 fetchAll 携带新类型统一取数，因此抑制 operateEnergyType 的单独请求
@@ -897,11 +916,12 @@ export default {
       }
     },
     drillToProvince(code, name, region = '') {
-      // 从全国下钻到省份：排名维度重置为「达标率」（省内默认维度）
+      // 从全国下钻到省份：排名维度重置为省内首项（正常是「达标率」；
+      // 行业筛选不含能源电力时可选维度只有达标率，同样取首项）
       // 省内切换区域（蒙西↔蒙东等）不算重新下钻，保留用户当前维度
       const fromCountry = this.query.level === 'country'
       if (fromCountry) {
-        this.setRankType(REGION_RANK_TYPES[0].value)
+        this.setRankType(this.rankOptionsFor('province')[0].value)
       }
       this.query.level = 'province'
       this.query.provinceCode = code
@@ -992,9 +1012,9 @@ export default {
     },
     // 地图「返回」：回到全国视图
     handleMapBack() {
-      // 返回全国：排名维度重置为「项目个数」（全国默认维度），在 level 变化前写入，
-      // 保证本批请求携带正确的 rankingType
-      this.setRankType(RANK_TYPES[0].value)
+      // 返回全国：排名维度重置为全国首项（正常是「项目个数」；行业筛选不含能源电力时只剩达标率），
+      // 在 level 变化前写入，保证本批请求携带正确的 rankingType
+      this.setRankType(this.rankOptionsFor('country')[0].value)
       this.query.level = 'country'
       this.query.provinceCode = ''
       this.query.regionName = ''
@@ -1056,6 +1076,16 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+
+::v-deep .el-input__inner {
+  height: 30px;
+  line-height: 30px;
+  border-radius: 8px;
+  background-color: rgba(96, 105, 127, 0.7);
+  color: #fff;
+  border-color: none !important;
+}
+
 .home-overview {
   display: flex;
   flex-direction: column;

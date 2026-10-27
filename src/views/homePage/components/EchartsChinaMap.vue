@@ -997,24 +997,27 @@ export default {
     box-shadow: none;
   }
 
-  /* 多选行：勾选框 / 图标 + 文案 */
+  /* 多选行：勾选框 / 图标 + 文案（面板是半透明灰蓝底，文字统一用白色） */
   &__check {
     display: flex;
     align-items: center;
     padding: 4px 6px;
     border-radius: 4px;
     font-size: 13px;
-    color: #303133;
+    /* 未选中同样是白字：深色字压在半透明灰蓝底上对比不足，且与面板 color:#fff 不统一 */
+    color: rgba(255, 255, 255, 0.75);
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
 
     &:hover {
-      background: #f5f7fa;
+      /* 白色浮层：原来的浅灰底会把白字吃掉 */
+      background: rgba(255, 255, 255, 0.16);
     }
 
     &.is-active {
-      color: #0088ff;
+      /* 选中态：纯白 + 加粗，与未选中的 75% 白形成层级 */
+      color: #fff;
       font-weight: 600;
     }
   }
@@ -1030,8 +1033,9 @@ export default {
     flex-shrink: 0;
 
     .is-active > & {
-      background: #0088ff;
-      border-color: #0088ff;
+      /* 勾选态用绿色（Element success #67c23a，与页面其它绿色标识一致），不用主题蓝 */
+      background: #67c23a;
+      border-color: #67c23a;
 
       &::after {
         content: '';
