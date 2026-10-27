@@ -64,6 +64,8 @@
         <div class="home-overview__left-scroll">
           <PanelCard title="项目总览" :sub-title="regionTitle" class="panel-block">
             <MetricList :items="overviewMetrics" :columns="2" variant="stat" value-color="#08f" />
+            <!-- 图表类型与原型保持一致（南丁格尔玫瑰 roseType: 'area'）；
+                 可读性通过「半径随容器尺寸自适应」解决，见 ChartPie.pieGeometry -->
             <ChartPie
               :data="pieData"
               :field-map="PIE_FIELD_MAP"
@@ -102,7 +104,7 @@
             :colors="MANAGE_COLORS"
             stack="total"
             :y-axis-names="['单位：个', '']"
-            height="300px"
+            height="250px"
           />
         </PanelCard>
 
@@ -1325,24 +1327,25 @@ export default {
     overflow-x: hidden;
     overflow-y: auto;
 
-    /* 滚动条默认不出现，hover 时显示细滚动条（与左右浮层一致） */
+    /* 细滚动条：内容超出时常显（不靠 hover 才出现，否则用户不知道这里还能往下看） */
     &::-webkit-scrollbar {
       width: 4px;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: transparent;
+      background: rgba(144, 147, 153, 0.35);
       border-radius: 2px;
     }
 
-    &:hover::-webkit-scrollbar-thumb {
-      background: rgba(144, 147, 153, 0.4);
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgba(144, 147, 153, 0.6);
     }
   }
 
   .hours-chart {
     flex: 1;
-    min-height: 150px;
+    /* 图表最小高度 100px：卡片剩余高度不足时由上面的 overflow-y: auto 出滚动条 */
+    min-height: 100px;
     margin-top: 8px;
     /* 滚动容器内不被压缩到 0，保证图表始终可读 */
     flex-shrink: 0;
@@ -1360,9 +1363,9 @@ export default {
     flex-direction: column;
   }
 
-  /* 列表换行撑高后，下方图表被压缩时的最小高度 */
+  /* 列表换行撑高后，下方图表被压缩时的最小高度（与 .summary-card .hours-chart 保持一致） */
   .chart-bar-line {
-    min-height: 150px;
+    min-height: 100px;
   }
 }
 </style>

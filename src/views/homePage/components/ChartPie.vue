@@ -6,9 +6,11 @@
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
 
-// 右侧竖向图例占用的宽度（px）：图标 12 + label 70 + 数值/占比文字 ≈ 168
+// 右侧竖向图例占用的宽度（px）：图标 12 + 间距 5 + label 62 + 「1136个(38%)」约 79 ≈ 158
 // 环形图圆心按「容器宽 - 图例宽」剩余空间居中，宽度越窄圆心越靠左
-const LEGEND_WIDTH = 168
+const LEGEND_WIDTH = 158
+// 环图与图例之间的留白：扇形右缘不会顶到图例图标上
+const LEGEND_GAP = 20
 
 /**
  * 通用环形/饼图 / 南丁格尔玫瑰图（纯展示，不含业务）
@@ -92,25 +94,42 @@ export default {
     this.chart = null
   },
   methods: {
-    // 圆心横向比例：右侧竖向图例固定占 LEGEND_WIDTH，剩余空间居中放置环形图。
-    // 面板越窄圆心越靠左（在 0.20~0.32 之间连续变化），避免环形图与图例文字互挤或被挤出左边界；
-    // 容器宽度未知（首帧未布局）时按原设计 0.28 兜底
-    centerRatioFor(width) {
-      if (!width) return 0.28
-      return Math.min(0.32, Math.max(0.2, ((width - LEGEND_WIDTH) / 2) / width))
+    // 环形图几何：圆心比例 + 外半径（px）
+    // 绘图区 = 容器宽 - 图例宽 - 图例左留白（LEGEND_GAP），环图在绘图区内居中、撑满可用高度。
+    // 好处：① 面板放大时环图跟着放大（原来固定 68% 只按高度算，宽屏下显得很小）；
+    //       ② 圆心按绘图区算，扇形右缘与图例之间固定留出 LEGEND_GAP，不再贴字；
+    //       ③ 半径受绘图区宽度约束，窄面板也不会被左边界裁掉
+    pieGeometry() {
+      const width = (this.chart && this.chart.getWidth()) || 0
+      const height = (this.chart && this.chart.getHeight()) || 0
+      // 首帧未布局：按原设计兜底
+      if (!width || !height) return { centerRatio: this.showLegend ? 0.28 : 0.5, outer: 0 }
+      if (!this.showLegend) {
+        return { centerRatio: 0.5, outer: Math.round(Math.max(28, Math.min(width, height) / 2 - 6)) }
+      }
+      const boxWidth = Math.max(80, width - LEGEND_WIDTH - LEGEND_GAP)
+      return {
+        centerRatio: Number((boxWidth / 2 / width).toFixed(4)),
+        outer: Math.round(Math.max(28, Math.min(boxWidth, height) / 2 - 6))
+      }
     },
-    // 容器尺寸变化：缩放画布；宽度变化导致圆心比例变化时再微调一次圆心
-    // （高度变化不影响圆心比例，跳过 setOption 避免连续缩放时的无谓重绘）
+    // 几何 patch：圆心 + 半径（半径按 px 下发，才能突破百分比只按高度计算的上限）
+    geometryPatch(geo) {
+      const patch = { center: [`${(geo.centerRatio * 100).toFixed(1)}%`, '50%'] }
+      // 非环图保持 radius '55%' 的原有视觉，只有环图用 px 半径
+      if (this.donut && geo.outer) patch.radius = [Math.round(geo.outer * 0.42), geo.outer]
+      return patch
+    },
+    // 容器尺寸变化：缩放画布；圆心/半径随新尺寸重算，变化时才 setOption
+    // （连续拖拽窗口时比例不变就跳过，避免无谓重绘）
     resize() {
       if (!this.chart) return
       this.chart.resize()
-      if (!this.showLegend) return
-      const ratio = Number(this.centerRatioFor(this.chart.getWidth()).toFixed(3))
-      if (ratio === this._centerRatio) return
-      this._centerRatio = ratio
-      this.chart.setOption({
-        series: [{ center: [`${(ratio * 100).toFixed(1)}%`, '50%'] }]
-      })
+      const geo = this.pieGeometry()
+      const key = `${geo.centerRatio.toFixed(3)}|${geo.outer}`
+      if (key === this._geomKey) return
+      this._geomKey = key
+      this.chart.setOption({ series: [this.geometryPatch(geo)] })
     },
     // 合并重绘：microtask 内去重，避免接口刷新时一次变更触发多轮 setOption
     scheduleRender() {
@@ -146,10 +165,10 @@ export default {
       // 按真实值计算占比（与渲染值无关）
       const realPercent = value => (total > 0 ? Math.round((value / total) * 100) : 0)
 
-      // 圆心横向位置：随容器宽度自适应（越窄越靠左，见 centerRatioFor）
-      const centerRatio = this.showLegend ? this.centerRatioFor(this.chart.getWidth()) : 0.5
-      // 记录当前比例：resize 时对比，比例没变就不重复 setOption
-      this._centerRatio = Number(centerRatio.toFixed(3))
+      // 圆心/半径：随容器尺寸自适应（越窄圆心越靠左、环图随可用空间放大）
+      const geo = this.pieGeometry()
+      // 记录当前几何：resize 时对比，几何没变就不重复 setOption
+      this._geomKey = `${geo.centerRatio.toFixed(3)}|${geo.outer}`
 
       const option = {
         color: this.colors,
@@ -168,17 +187,18 @@ export default {
             orient: 'vertical',
             right: 0,
             top: 'middle',
-            // 原型：每个类型项有最小行高（图标 12 + 行距 16 ≈ 28px/行），列表更舒展、易点选
+            // 行距 5px：5 类目总高约 115px，比之前的 16px 行距紧凑一半，整块仍与环图垂直居中
             itemWidth: 12,
             itemHeight: 12,
-            itemGap: 16,
+            itemGap: 5,
             textStyle: {
               fontSize: 12,
               color: '#606266',
               // 图例两列排版：label 深色固定宽度对齐，value 蓝色（数值+占比）
               rich: {
-                label: { color: '#303133', fontSize: 12, width: 70, align: 'left', lineHeight: 18 },
-                value: { color: '#1890ff', fontSize: 12, fontWeight: 600, align: 'left', lineHeight: 18 }
+                // label 用常规灰、value（数量+占比）加粗放大一号：占比是主要信息，不能被数量压住
+                label: { color: '#606266', fontSize: 12, width: 62, align: 'left', lineHeight: 18 },
+                value: { color: '#1890ff', fontSize: 13, fontWeight: 600, align: 'left', lineHeight: 18 }
               }
             },
             formatter: name => {
@@ -192,10 +212,9 @@ export default {
           {
             type: 'pie',
             roseType: this.roseType || false,
-            radius: this.donut ? ['25%', '68%'] : '55%',
-            center: this.showLegend
-              ? [`${(centerRatio * 100).toFixed(1)}%`, '50%']
-              : ['50%', '50%'],
+            // 环图半径按可用空间算（px），非环图仍用百分比
+            radius: this.donut && geo.outer ? [Math.round(geo.outer * 0.42), geo.outer] : (this.donut ? ['30%', '80%'] : '55%'),
+            center: [`${(geo.centerRatio * 100).toFixed(1)}%`, '50%'],
             // 扇区之间白色缝隙（原型效果）
             itemStyle: {
               borderColor: '#fff',
@@ -207,9 +226,10 @@ export default {
                 show: true,
                 position: 'center',
                 formatter: () => `${this.centerText.value}`,
-                fontSize: 22,
+                // 环图放大后中心数字同步放大，保持「中心值 ≈ 环宽」的视觉比例
+                fontSize: 24,
                 fontWeight: 700,
-                lineHeight: 26,
+                lineHeight: 28,
                 color: '#303133'
               }
               : { show: false },
