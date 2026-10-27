@@ -629,12 +629,10 @@ export default {
           // 有电价数据时颜色由 visualMap 接管；下钻到省后无省级着色、全国未选电价时也用灰白底
           // 仅「全国视图 + 未选电价」保持纯白无热力（交互7）
           areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
-          // 白色边框 + 浅灰投影（原型：区域间白色细界线，整体立体感）
-          borderColor: '#ffffff',
-          borderWidth: 1.5,
-          shadowColor: 'rgba(140, 150, 165, 0.35)',
-          shadowBlur: 10,
-          shadowOffsetY: 5
+          // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
+          // 有底色时用白色细线；纯白底 (全国 + 未选电价) 白线会完全看不见，改用浅灰细线
+          borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
+          borderWidth: 1.5
         },
         emphasis: {
           itemStyle: {
@@ -781,12 +779,10 @@ export default {
               // 有电价着色或已下钻到省 → 灰白底；全国未选电价 → 纯白无热力（交互7）
               // 区域绘制实际取 geo 样式，此处与 buildMapSeries 保持一致
               areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
-              // 白色边框 + 浅灰投影（原型效果：白色省界/区县界，整体带灰色立体投影）
-              borderColor: '#ffffff',
-              borderWidth: 1.5,
-              shadowColor: 'rgba(140, 150, 165, 0.35)',
-              shadowBlur: 10,
-              shadowOffsetY: 5
+              // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
+              // 有底色时用白色细线；纯白底（全国 + 未选电价）白线会看不见，改用浅灰细线
+              borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
+              borderWidth: 1.5
             },
             emphasis: {
               itemStyle: {
