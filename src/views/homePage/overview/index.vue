@@ -1028,11 +1028,23 @@ export default {
     },
     // 卡片「更多>>」：跳转打开该项目对应的详情页面（原型交互13）
     handlePointMore({ raw, detail }) {
-      this.$message.info(`跳转项目详情页：${raw.projectCode || raw.projectName || ''}`)
+      this.$message.info(`跳转项目详情页：模拟`, {
+        ...detail
+      })
+      window.open(
+        `${window.location.origin}/operational/project-list?mode=detail&projectCode=PPB202609005&pannel=base&id=11704`,
+        '_blank'
+      )
     },
     // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
     handlePointDetail({ raw, detail }) {
-      this.$message.info(`跳转运营填报列表页：${raw.projectCode || raw.projectName || ''}`)
+      this.$message.info(`跳转运营填报列表页：模拟`, {
+        ...detail
+      })
+      window.open(
+        `${window.location.origin}/operational/project-list?mode=detail&projectCode=PPB202609005&pannel=operational-data&id=11704`,
+        '_blank'
+      )
     },
     handleMore() {
       this.$message.info('跳转项目清单页')
