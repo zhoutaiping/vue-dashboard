@@ -29,8 +29,10 @@
       </div>
     </div>
 
-    <!-- 左下角：颜色图例由 echarts visualMap 在画布内渲染；此处只保留结算电价菜单（单选，check/uncheck 图标） -->
-    <div class="echarts-china-map__panel echarts-china-map__panel--legend">
+    <!-- 左下角：颜色图例由 echarts visualMap 在画布内渲染；此处只保留结算电价菜单（单选，check/uncheck 图标）。
+         行业筛选不含「能源电力」时父级不下发电价维度（priceOptions 为空），整块隐藏，
+         颜色图例也因 priceType 为空随之隐藏，地图回到无色状态 -->
+    <div v-if="priceOptions.length" class="echarts-china-map__panel echarts-china-map__panel--legend">
       <div class="echarts-china-map__price">
         <div
           v-for="item in priceOptions"

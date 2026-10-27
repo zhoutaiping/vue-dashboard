@@ -381,6 +381,11 @@ export default {
       if (!sel.length) return true
       return sel.indexOf(POWER_CATEGORY_ID) > -1
     },
+    // 电价维度默认值：含「能源电力」取菜单首项（风电结算电价）；
+    // 不含时为空 —— 此时无发电项目、无电价数据，左下角电价菜单与颜色图例整体隐藏
+    defaultPriceType() {
+      return this.hasPowerIndustry ? PRICE_OPTIONS[0].id : ''
+    },
     // 运营项目情况的类型可选项（最少一项，不存在空态）：
     // 包含能源电力 → 风电/光伏/非标；不包含能源电力 → 仅非标
     energyTypeOptions() {
@@ -549,6 +554,9 @@ export default {
     // 真实结算电价数值较小（0.0001~0.3655），0 也是有效值 —— 可解析即入色阶，仅字段缺失保持白色
     // 未选中（priceType 为空）→ 返回空数组，地图不着色（纯白，交互7）
     provincePrices() {
+      // 行业筛选不含「能源电力」：无发电项目、无电价数据，地图不着色
+      // （priceType 已同时清空，左下角颜色图例随之隐藏）
+      if (!this.hasPowerIndustry) return []
       const option = PRICE_OPTIONS.find(o => o.id === this.priceType)
       if (!option) return []
       const toDatum = (name, obj) => {
@@ -682,8 +690,11 @@ export default {
       return region ? region.cities : []
     },
     // 电价菜单（左下角）：全国视图提供全部维度（含标杆电价）；
-    // 下钻到省后无市区级标杆数据，菜单去掉标杆电价
+    // 下钻到省后无市区级标杆数据，菜单去掉标杆电价。
+    // 行业筛选不含「能源电力」时直接返回空数组 —— 无发电项目，电价着色无意义，
+    // 地图组件据此整块隐藏左下角电价菜单（颜色图例由 priceType 为空一并隐藏）
     priceOptions() {
+      if (!this.hasPowerIndustry) return []
       return this.query.level === 'country'
         ? PRICE_OPTIONS
         : PRICE_OPTIONS.filter(o => o.id !== 'benchmark')
@@ -874,6 +885,13 @@ export default {
       this.resetEnergyType()
       // 行业变化会改变排名可选维度（不含能源电力时只剩达标率），需要同步校正
       this.ensureRankTypeAvailable()
+      // 电价维度跟随行业：不含能源电力 → 清空（菜单/图例隐藏、地图不着色）；
+      // 重新包含且当前为空 → 回到默认首项，保留用户原来的电价选择
+      if (!this.hasPowerIndustry) {
+        this.priceType = ''
+      } else if (!this.priceType) {
+        this.priceType = this.defaultPriceType
+      }
     },
     // 某层级下的排名维度候选（rankTypeOptions 的计算来源）：
     // 「全部」或包含「能源电力」→ 该层级完整维度；
@@ -950,9 +968,9 @@ export default {
       // 省内菜单不含标杆电价，沿用旧选择会出现「菜单项消失但地图仍按标杆电价着色」；
       // 省内切区域（蒙西↔蒙东等）不算重新下钻，保留用户当前选择
       if (fromCountry) {
-        this.priceType = PRICE_OPTIONS[0].id
+        this.priceType = this.defaultPriceType
       } else if (!this.priceOptions.some(o => o.id === this.priceType)) {
-        this.priceType = PRICE_OPTIONS[0].id
+        this.priceType = this.defaultPriceType
       }
     },
     // 地图点击：点的是拆分区域（蒙西/蒙东、冀北/河北南网）→ 下钻到区域；点的是省份 → 下钻到省
@@ -1035,8 +1053,9 @@ export default {
       this.query.regionName = ''
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
-      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
-      this.priceType = PRICE_OPTIONS[0].id
+      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择；
+      // 行业不含能源电力时复位为空（菜单/图例保持隐藏）
+      this.priceType = this.defaultPriceType
     },
     handlePieClick(params) {
       const target = CATEGORIES.find(c => c.name === params.name)
@@ -1075,7 +1094,7 @@ export default {
       const data = detail.projectType === 'POWER' ? power : nonStandard
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
       const idPart = data.id ? `&id=${data.id}` : ''
-      if (detail.projectType === 'POWER') {
+      if (Number(data.status) === 2) {
         window.open(
           `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=base${idPart}`,
           '_blank'
@@ -1097,7 +1116,7 @@ export default {
       const data = detail.projectType === 'POWER' ? power : nonStandard
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
       const idPart = data.id ? `&id=${data.id}` : ''
-      if (detail.projectType === 'POWER') {
+      if (Number(data.status) === 2) {
         window.open(
           `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=operational-data${idPart}`,
           '_blank'
