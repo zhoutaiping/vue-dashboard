@@ -65,7 +65,7 @@ export default {
     // 容器尺寸变化（flex 自适应高度、卡片显隐等）时图表跟随缩放，window resize 覆盖不到这些场景
     if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
       this.resizeObserver = new ResizeObserver(() => {
-        if (this.chart) this.chart.resize()
+        this.resize()
       })
       this.resizeObserver.observe(this.$refs.chart)
     }
@@ -80,6 +80,17 @@ export default {
     this.chart = null
   },
   methods: {
+    // 跟随容器缩放（覆盖 mixin 的同名方法）：宽高变化都要 resize；宽度跨档时补一次重绘，
+    // 因为图例/单位的排版档位是按「渲染那一刻的宽度」算出来的，全屏切换、面板显隐后
+    // 若只 resize 不重绘，窄栏的紧凑图例/隐藏单位会被带到宽布局里
+    resize() {
+      if (!this.chart) return
+      this.chart.resize()
+      this.legendLayoutWidth = this.legendLayoutWidth || 0
+      if (this.legendLayoutWidth && Math.abs(this.chart.getWidth() - this.legendLayoutWidth) > 40) {
+        this.renderChart()
+      }
+    },
     // 合并重绘：microtask 内去重，避免接口刷新时一次变更触发多轮 setOption
     scheduleRender() {
       if (this.renderScheduled) return
@@ -194,12 +205,52 @@ export default {
         .reduce((acc, s) => acc.concat(s.data || []), []))
       // 是否配置了轴名/单位：有则多留一行，避免轴名与图例贴字
       const hasAxisName = !!(this.yAxisNames[0] || this.yAxisNames[1])
-      // 顶栏布局：图例居中 + 右侧单位。容器过窄时（图例右缘会压到单位上）图例改为靠左，
-      // 再窄则同时缩小图例字号/间距，保证「图例 + 单位」在小屏右侧栏里也不相撞
-      // 380 / 340 为「3~4 项图例 + 单位」不重叠的经验阈值
+      // 顶栏布局：图例 + 右侧单位。按「实测文字宽度」判断居中/靠左/缩字，
+      // 不再用固定宽度阈值 —— 图例项数与名称长度都不同，阈值法在窄栏（如 300px 右栏）会叠字
       const chartWidth = (this.chart && this.chart.getWidth()) || 0
-      const legendCentered = !this.chart || chartWidth >= 380
-      const legendCompact = chartWidth > 0 && chartWidth < 340
+      // 记录本次排版所用的宽度：resize() 据此判断宽度是否跨档，需要补一次重绘
+      this.legendLayoutWidth = chartWidth
+      const legendData = this.buildLegendData()
+      // 文字宽度估算：echarts.format.getTextRect 以 12px 为基准量宽，按目标字号等比换算
+      const textWidth = (text, fontSize) => {
+        const str = String(text == null ? '' : text)
+        if (echarts.format && echarts.format.getTextRect) {
+          return (echarts.format.getTextRect(str).width * fontSize) / 12
+        }
+        // 兜底：中文按 1 个字宽、其它按 0.6 个字宽
+        return str.split('').reduce((w, ch) => w + (/[\u4e00-\u9fa5]/.test(ch) ? fontSize : fontSize * 0.6), 0)
+      }
+      // 单项目宽 = 图标 20 + 图标与文字间距 6 + 文字宽 + 2 容错；再加项目间距
+      const legendWidth = (fontSize, itemGap) => legendData.reduce(
+        (sum, d) => sum + 20 + 8 + textWidth(d.name, fontSize),
+        itemGap * Math.max(0, legendData.length - 1)
+      )
+      const unitText = this.unit || ''
+      const unitWidth = unitText ? textWidth(unitText, 12) : 0
+      // 图例字号/间距三档降级：13/16 → 12/10 → 11/6，逐档试到「图例 + 单位 + 留白」放得下为止
+      const legendTiers = [
+        { fontSize: 13, itemGap: 16 },
+        { fontSize: 12, itemGap: 10 },
+        { fontSize: 11, itemGap: 6 }
+      ]
+      let legendFontSize = legendTiers[0].fontSize
+      let legendItemGap = legendTiers[0].itemGap
+      let legendWidthPx = legendWidth(legendFontSize, legendItemGap)
+      // 居中判定：图例居中后左缘 = (W - legendW) / 2、右缘 = (W + legendW) / 2，
+      // 要给右侧单位让开「单位宽 + 4 贴边 + 16 间距」，即 W ≥ 2 × (legendW/2 + unitW + 20)
+      const centeredMinWidth = legendWidthPx + (unitWidth ? unitWidth * 2 + 40 : 24)
+      // 余量够就把图例居中（顶栏视觉重心），不够就靠左，把右侧整段留给单位
+      const legendCentered = !chartWidth || chartWidth >= centeredMinWidth
+      if (!legendCentered && chartWidth) {
+        for (const tier of legendTiers) {
+          legendFontSize = tier.fontSize
+          legendItemGap = tier.itemGap
+          legendWidthPx = legendWidth(legendFontSize, legendItemGap)
+          if (legendWidthPx + unitWidth + 16 <= chartWidth) break
+        }
+      }
+      // 缩到最小档仍会压到单位：让单位让位（图例信息优先），避免两段文案叠在一起
+      const showUnit = !!unitText && (!chartWidth || legendWidthPx + unitWidth + 12 <= chartWidth)
 
       const option = {
         color: this.colors,
@@ -240,26 +291,26 @@ export default {
             icon: 'roundRect',
             itemWidth: 20,
             itemHeight: 10,
-            itemGap: legendCompact ? 10 : 16,
+            itemGap: legendItemGap,
             inactiveColor: '#c0c4cc',
             // 项目当前为 echarts 4.x，legend.data 不支持 itemStyle（5.1+ 才有）；
             // 折线圆点是白心填充（itemStyle.color=#fff），图例取系列填充色会渲染成白色不可见，
             // 这里为每个图例项生成内联 SVG 彩色圆角图标，兼容 4.x/5.x
-            data: this.buildLegendData(),
+            data: legendData,
             // renderChart 是 notMerge 全量替换，需回填选中状态，避免图例切换被重置
             selected: Object.assign({}, this.legendSelected),
-            textStyle: { fontSize: legendCompact ? 12 : 13, color: '#303133', fontWeight: 500 }
+            textStyle: { fontSize: legendFontSize, color: '#303133', fontWeight: 500 }
           }
           : { show: false },
         // 单位标签：与图例同一行、贴右边缘，主题蓝 #08f（与数值同一套主色），小一号不抢图例
         // lineHeight 与图例文字（13px，行高约 18）对齐，二者在同一基线上，顶栏才整齐；
-        // right 留 4px，避免贴边被裁
-        graphic: this.unit
+        // right 留 4px，避免贴边被裁；空间不足时（showUnit 为 false）隐藏，优先保证图例可读
+        graphic: showUnit
           ? [{
             type: 'text',
             right: 4,
             top: 0,
-            style: { text: this.unit, fill: '#08f', fontSize: 12, lineHeight: 18 }
+            style: { text: unitText, fill: '#08f', fontSize: 12, lineHeight: 18 }
           }]
           : undefined,
         // 顶部留白：图例 18 + 轴名一行 22（无轴名时不占这一行，把高度还给绘图区）

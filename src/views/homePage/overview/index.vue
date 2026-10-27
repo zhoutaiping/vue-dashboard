@@ -1,5 +1,5 @@
 <template>
-  <div class="home-overview" :class="{ 'home-overview--narrow': isNarrow }">
+  <div class="home-overview" :class="'home-overview--' + layoutMode">
     <div class="home-overview__body">
       <!-- 地图铺满底层 -->
       <div class="home-overview__map">
@@ -198,13 +198,20 @@ import {
 } from './config'
 import provinceIcon from '../province.svg'
 
-// 窄屏布局阈值（px，按页面主体宽度判定）：小于该宽度切换为「左栏 → 地图 → 右栏」纵向排布
-// 宽屏模式下左右浮层各占 25%，阈值取 1280 可保证浮层最窄仍有 ~320px，图表不小于可用宽度
-const NARROW_LAYOUT_WIDTH = 1280
+// 布局分档（px，按页面主体宽度判定）：
+//   < 1024      → 纵向堆叠（「工具条 → 左栏 → 地图 → 右栏」，真放不下三栏时才开始整页滚动）
+//   1024 ~ 1440 → 三栏 + 浮层加宽到 28%（1300~1400 是「1920 屏开侧边 DevTools」「1366 笔记本」的常见可用宽度，
+//                 按 25% 只剩 270px 左右，卡片标题会与操作按钮挤在一起）
+//   ≥ 1440      → 三栏 + 浮层 25%
+// 旧阈值 1280 会把上面这类桌面窗口误判成移动端堆叠
+const NARROW_LAYOUT_WIDTH = 1024
+const MEDIUM_LAYOUT_WIDTH = 1440
 
-// 左右浮层宽度占比（与样式里的 --panel-width: 25% 保持一致）
+// 左右浮层宽度占比（与样式里的 --panel-width 保持一致）
 // 宽屏下传给地图组件，用于计算浮动菜单/颜色图例的让位宽度；窄屏无浮层遮挡，传 0
 const PANEL_WIDTH_RATIO = 0.25
+// 中等宽度档的浮层占比（与样式 --panel-width: 28% 一致）
+const PANEL_WIDTH_RATIO_MEDIUM = 0.28
 
 /**
  * 首页总览容器
@@ -280,13 +287,21 @@ export default {
     }
   },
   computed: {
+    // 布局档位：narrow（纵向堆叠）/ medium（三栏 + 浮层 28%）/ wide（三栏 + 浮层 25%）
+    layoutMode() {
+      if (!this.pageWidth) return 'wide'
+      if (this.pageWidth < NARROW_LAYOUT_WIDTH) return 'narrow'
+      if (this.pageWidth < MEDIUM_LAYOUT_WIDTH) return 'medium'
+      return 'wide'
+    },
     // 窄屏：页面主体宽度不足，切换为纵向排布
     isNarrow() {
-      return this.pageWidth > 0 && this.pageWidth < NARROW_LAYOUT_WIDTH
+      return this.layoutMode === 'narrow'
     },
     // 地图浮动菜单的让位比例：宽屏让开左右浮层，窄屏地图通栏无需让位
     mapSideRatio() {
-      return this.isNarrow ? 0 : PANEL_WIDTH_RATIO
+      if (this.isNarrow) return 0
+      return this.layoutMode === 'medium' ? PANEL_WIDTH_RATIO_MEDIUM : PANEL_WIDTH_RATIO
     },
     // 多选分类 → 刷新键组成部分：空数组 = 全部（'all'），否则逗号拼接的 id 串
     categoryParam() {
@@ -1125,6 +1140,22 @@ export default {
   /* 右上角状态筛选的顶部位置：宽屏落在工具条（月份选择器）下方 */
   --map-panel-top: 60px;
 
+  /* 中等宽度（1024~1440）：浮层从 25% 加宽到 28%。
+     这类窗口下 25% 只有 270px 左右，「运营项目情况」标题会和右上角操作按钮挤在一起，
+     指标也会被省略号吃掉；加宽到 28% 后卡片仍有 ~300px，地图与工具条仍留出可视宽度。
+     工具条/地图让位全部由 --panel-width 派生，这里改一处即可联动 */
+  &--medium {
+    --panel-width: 28%;
+  }
+
+  /* 窄面板兜底：卡片标题与右上角操作区放不下时整体换行，不再互相压字 */
+  ::v-deep .panel-card__header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 40px;
+    row-gap: 2px;
+  }
+
   /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
   &:fullscreen {
     height: 100vh;
@@ -1434,6 +1465,42 @@ export default {
     margin-top: 8px;
     /* 滚动容器内不被压缩到 0，保证图表始终可读 */
     flex-shrink: 0;
+  }
+}
+
+/* 中等宽度（1024~1440）：浮层只有 ~300px，指标行放不下「图标 + 标签 + 长数值」一行，
+   单行会被省略号剪成「上… 26649 万kWh」。这里改成「标签一行、数值一行」的两行紧凑排布
+   （上下内边距压到 4px），文字完整可读，指标区只多吃 ~24px；
+   宽屏（≥1440）仍保持单行紧凑排布，不为少数宽度牺牲图表高度 */
+.home-overview--medium .summary-card {
+  ::v-deep .metric-list.is-card .metric-item {
+    height: auto;
+    min-height: 40px;
+    padding: 4px 8px;
+  }
+
+  ::v-deep .metric-item__main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  ::v-deep .metric-item__label,
+  ::v-deep .metric-item__value {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 两行排布下收紧行高，把指标区多吃的高度补回来（每项约 50px） */
+  ::v-deep .metric-item__label {
+    min-height: 0;
+    line-height: 18px;
+  }
+
+  ::v-deep .metric-item__value {
+    line-height: 22px;
   }
 }
 

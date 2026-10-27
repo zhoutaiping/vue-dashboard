@@ -20,7 +20,8 @@
 /**
  * 通用分类 Tab（纯展示，支持 v-model 单选 / 多选）
  * 字段名通过 fieldMap 自定义：{ label, value, count }
- * 多选模式（multiple）：与"全部"项双向联动——点"全部"全选、可逐个取消、允许全部取消（清空态）
+ * 多选模式（multiple）：与"全部"项双向联动——点"全部"全选、点已选中的行业取消该项
+ * （全选态下直接对该项生效、"全部"随之回落）、至少保留一项
  */
 export default {
   name: 'CategoryTabs',
@@ -65,11 +66,13 @@ export default {
       if (!this.multiple) return item.value === this.value
       return item.value === this.allValue ? this.isAllSelected : this.selectedList.includes(item.value)
     },
-    // 置灰规则（多选模式）："全部"未全选时置灰；已全选时其余行业置灰
-    // 置灰项仍可点击：点置灰"全部"→重新全选；点置灰行业→取消该项（"全部"随之置灰）
+    // 置灰规则（多选模式）：只有"全部"在「未全选」时置灰。
+    // 全选时不再把各行业置灰 —— 要求「全部 + 每个行业」同时点亮，否则会出现
+    // 「明明全选了，却只有『全部』是蓝色、5 个行业全是灰的」这种看起来像没选中的状态；
+    // 取消任意一个行业即视为未全选，"全部"自动回落为灰色
     isMuted(item) {
       if (!this.multiple) return false
-      return item.value === this.allValue ? !this.isAllSelected : this.isAllSelected
+      return item.value === this.allValue && !this.isAllSelected
     },
     handleClick(item) {
       if (!this.multiple) {
@@ -83,12 +86,12 @@ export default {
         // 点"全部"：全选所有分类；已全选则不重复触发
         if (this.isAllSelected) return
         next = this.realItems.map(i => i.value)
-      } else if (this.isAllSelected) {
-        // 全选状态下点击具体行业：切换为仅选中该行业，其余取消（原型交互）
-        next = [item.value]
       } else if (this.selectedList.includes(item.value)) {
-        // 再次点击取消选中；允许全部取消（原型注4：全部取消时页面数据清空，仅保留筛选器）
+        // 点已选中的行业 → 取消该项（全选态下同样生效，取消任意一项后"全部"自动回落为未选中）
+        // 至少保留一项：空数组在页面侧等价于「全部」（industry 传空取全量），
+        // 把最后一项也取消掉会立刻弹回全选，看起来像点击没生效，故忽略该次点击
         next = this.selectedList.filter(v => v !== item.value)
+        if (!next.length) return
       } else {
         next = this.selectedList.concat(item.value)
       }
