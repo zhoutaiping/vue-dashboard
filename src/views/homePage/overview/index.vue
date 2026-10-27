@@ -620,8 +620,16 @@ export default {
       const province = this.currentProvinceShort
       return this.points.filter(p => {
         // 跨省点位过滤：下钻到某省（含区域）时，projectList 若混入其它省份的项目
-        // （如请求蒙西却返回北京的项目），一律丢弃，避免点位飘在本省地图外
-        if (province && p.provinceName && String(p.provinceName).indexOf(province) < 0) return false
+        // （如请求蒙西却返回北京的项目），一律丢弃，避免点位飘在本省地图外。
+        // 注意：下钻拆分省份时接口的 provinceName 就是区域名（蒙西/蒙东、冀北/河北南网，
+        // 见 DRILL_REGION_AS_PROVINCE_NAME），区域名里不含「内蒙古/河北」，
+        // 直接做包含判断会把整批点删掉（表现为「接口有项目返回、地图却不打点」），
+        // 所以先把区域名映射回所属省份再比较
+        if (province && p.provinceName) {
+          const pointRegion = findRegion(p.provinceName)
+          const pointProvince = pointRegion ? pointRegion.province : provinceShortName(p.provinceName)
+          if (String(pointProvince).indexOf(province) < 0) return false
+        }
         if (region) {
           const cityRegion = cityRegionName(province, p.cityName)
           if (cityRegion && cityRegion !== region) return false
