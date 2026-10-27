@@ -450,7 +450,7 @@ export default {
         )
         return {
           label: m.label,
-          value: this.operateDetail[m.field],
+          value: this.pickOperateValue(m.field),
           unit: m.unit,
           icon: icons[key] || 'el-icon-document'
         }
@@ -824,6 +824,17 @@ export default {
           code: province ? province.code : ''
         }
       })
+    },
+    // 运营指标取值：field 可能是字段名或候选字段数组，按顺序取第一个「有值」的
+    // （后端同一语义命名不统一：利用小时数风电为 usehour、光伏为 useHour；结算电价为 electrovalence；
+    //  null / undefined / 空串视为无值，0 是有效值需要保留）
+    pickOperateValue(field) {
+      const keys = Array.isArray(field) ? field : [field]
+      for (let i = 0; i < keys.length; i += 1) {
+        const value = this.operateDetail[keys[i]]
+        if (value !== null && value !== undefined && value !== '') return value
+      }
+      return null
     },
     // 运营项目情况：POST queryOperateDetail，入参 = 全局报表参数 + operateType（随风电/光伏/非标切换联动）
     async fetchOperateDetail(seq = this.nextSeq()) {
@@ -1443,83 +1454,20 @@ export default {
     }
   }
 
-  /* 指标行占死半栏、内容过长只省略不换行：
-     MetricList 的 is-card 变体默认「内容超半行宽时禁止压缩、整项换到单独一行铺满」，
-     右栏只有页面主体 25%（1080P 展开菜单时约 428px），「上网电量 200012.00 万kWh」
-     这类长值会把 3 行撑成 4 行，多占 48px 直接从下方图表里扣，图表高度随数据长短抖动。
-     这里锁死半栏宽 + 标签省略号，6 个指标恒定 3 行；
-     用 .panel-card.summary-card 双类名保证优先级高于 MetricList 自身的
-     .metric-list.is-card .metric-item[data-v-x]，不受样式注入顺序影响 */
-  &.panel-card {
-    ::v-deep .metric-list.is-card .metric-item {
-      flex: 0 0 calc(50% - 8px);
-      min-width: 0;
-      overflow: hidden;
-    }
-  }
-
-  ::v-deep .metric-item {
-    &__main {
-      flex-wrap: nowrap;
-    }
-
-    &__label {
-      flex: 1 1 auto;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    &__value {
-      flex: 0 0 auto;
-      white-space: nowrap;
-    }
-  }
+  /* 指标行排布交回 MetricList 的 is-card 规则（flex: 1 1 calc(50% - 8px) + min-width: max-content）：
+     默认两列并排，某一项内容放不下半行宽时该项不压缩、整项换到单独一行铺满，
+     标签/数值完整显示（原型注2）。这里不再锁死半栏宽做省略号，否则会出现
+     「装机… / 上网… / 千瓦…」这种标签被截断、也失去换行占一行的问题。
+     代价是长数值会把指标区多撑一行，图表由下方 min-height 兜底（最小值 150px） */
 
   .hours-chart {
     flex: 1;
-    /* 图表最小高度 160px：卡片剩余高度不足时由上面的 overflow-y: auto 出滚动条 */
-    min-height: 160px;
+    /* 图表最小高度 150px（原型注2「下面表格高度压缩，最小值 150px」）：
+       指标区因换行多吃高度时，先压缩图表，压到 150px 仍不够则由上面的 overflow-y: auto 出滚动条 */
+    min-height: 150px;
     margin-top: 8px;
     /* 滚动容器内不被压缩到 0，保证图表始终可读 */
     flex-shrink: 0;
-  }
-}
-
-/* 中等宽度（1024~1440）：浮层只有 ~300px，指标行放不下「图标 + 标签 + 长数值」一行，
-   单行会被省略号剪成「上… 26649 万kWh」。这里改成「标签一行、数值一行」的两行紧凑排布
-   （上下内边距压到 4px），文字完整可读，指标区只多吃 ~24px；
-   宽屏（≥1440）仍保持单行紧凑排布，不为少数宽度牺牲图表高度 */
-.home-overview--medium .summary-card {
-  ::v-deep .metric-list.is-card .metric-item {
-    height: auto;
-    min-height: 40px;
-    padding: 4px 8px;
-  }
-
-  ::v-deep .metric-item__main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-  }
-
-  ::v-deep .metric-item__label,
-  ::v-deep .metric-item__value {
-    max-width: 100%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* 两行排布下收紧行高，把指标区多吃的高度补回来（每项约 50px） */
-  ::v-deep .metric-item__label {
-    min-height: 0;
-    line-height: 18px;
-  }
-
-  ::v-deep .metric-item__value {
-    line-height: 22px;
   }
 }
 

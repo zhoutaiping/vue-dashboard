@@ -78,10 +78,12 @@ export function queryBuildandOperate(data) {
 // 运营项目情况：POST /largeScreen/queryOperateDetail
 // 入参 { industry, month, operateType, provinceName, status }
 //   - operateType: 类型 1.风电; 2.光伏; 3.非标
-// 返回 data: { projectCount, capacity, onlinePower, useHours, electricityPrice, income,
+// 返回 data: { projectCount, capacity, onlinePower, usehour|useHour, electrovalence, income,
 //   writeIncome, accountIncome, yield, oneMetric,
 //   powerLineChart: [{ oneMetric, yield, month }],      // 风电/光伏发电指标图（oneMetric=利用小时数）
 //   nonPowerLineChart: [{ oneMetric, yield, month }] }  // 非标指标图表（oneMetric=度电收入）
+// 注意：利用小时数字段两种发电类型拼写不一致（风电 usehour、光伏 useHour），
+//      结算电价字段为 electrovalence；映射见 views/homePage/overview/config.js 的 OPERATE_METRICS
 export function queryOperateDetail(data) {
   return postRequest('/largeScreen/queryOperateDetail', data)
 }
