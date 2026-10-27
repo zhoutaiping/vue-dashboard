@@ -546,7 +546,7 @@ export default {
       return Object.assign({}, provinceGeoJson, { features })
     },
     // 按分类分组为多个 scatter series，每个分类一种颜色
-    // 点位若带补贴属性图标（subsidyIcons = station-1/2/3，蓝=无补贴 / 橙=有补贴 / 绿=合规清单），
+    // 点位若带补贴属性图标（subsidyIcons = station-1/2/3，蓝=无补贴 / 橙=已补贴 / 绿=合规清单），
     // 用对应 station 图片作为 symbol（图片自带配色，与右下角图例共用同一套图标）
     // symbolSize 必须用数字：数组尺寸会让 zrender 走 scale 缩放渲染（style.width=2 + scale），
     // zrender 4 的 Image.contain 不做 transform 逆变换，该形态下鼠标命中/悬浮全部失效

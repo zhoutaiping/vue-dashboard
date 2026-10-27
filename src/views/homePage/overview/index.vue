@@ -248,7 +248,7 @@ export default {
       // 状态筛选（显示运营/显示在建）默认全选：初始勾选态与原型一致；
       // 全选与"未选"等价（均展示全量，接口 status=3），全部取消 = 展示全量（原型注5）
       buildFilter: ['运营', '在建'],
-      subsidyFilter: ['无补贴', '有补贴', '合规清单'],
+      subsidyFilter: ['无补贴', '已补贴', '合规清单'],
       priceType: 'wind',
 
       query: Object.assign({}, DEFAULT_QUERY),
@@ -269,7 +269,7 @@ export default {
       activeLayers: [],
       // 地图展示原始数据（mapDisplay 返回：全国=省份数组，省份=单对象；归一化存为省份数组）
       provinceGroups: [],
-      // 地图点位分类（补贴属性三分类：无补贴/有补贴/合规清单）
+      // 地图点位分类（补贴属性三分类：无补贴/已补贴/合规清单）
       pointCategories: POINT_CATEGORIES,
       // 省会标记点 + 图标
       capitals: PROVINCE_CAPITALS,
@@ -501,7 +501,7 @@ export default {
       return CATEGORIES.map(c => ({ key: c.id, label: c.name, color: c.color }))
     },
     // 地图点位：provinceGroups.projectList 平铺归一化
-    // 分类按业务口径推导：合规 natProject=1 && compCatalog=1（优先）；有补贴 natProject=1；其余无补贴 natProject!=1
+    // 分类按业务口径推导：合规 natProject=1 && compCatalog=1（优先）；已补贴 natProject=1；其余无补贴 natProject!=1
     points() {
       const list = []
       this.provinceGroups.forEach(group => {
@@ -515,7 +515,7 @@ export default {
             lng: toCoordNumber(item.longitude),
             lat: toCoordNumber(item.latitude),
             category: cat.id,
-            // 补贴类型名与 station_type 图标 key 一致（无补贴/有补贴/合规清单）
+            // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴/合规清单）
             categoryName: cat.name,
             subsidy: cat.name,
             // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），

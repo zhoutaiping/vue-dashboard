@@ -27,12 +27,12 @@ export const fullscreenIcon = {
   2: fullscreen2 // 退出
 }
 
-// 地图点位 / 右下角图例图标：station 三色图标（蓝=无补贴、橙=有补贴、绿=合规清单，与 POINT_CATEGORIES 一一对应）
+// 地图点位 / 右下角图例图标：station 三色图标（蓝=无补贴、橙=已补贴、绿=合规清单，与 POINT_CATEGORIES 一一对应）
 // 注意：图标颜色是画在图片里的，文件名与业务分类并不对应（station-2 是绿色、station-3 是橙色），
 // 这里按图片实际颜色映射，保证打点、图例、弹窗图钉三者同色
 export const station_type = {
   '无补贴': station1, // 蓝
-  '有补贴': station3, // 橙
+  '已补贴': station3, // 橙
   '合规清单': station2 // 绿
 }
 
@@ -95,7 +95,7 @@ export const POINT_FIELD_MAP = {
 // 地图点位三分类（补贴属性，key 与接口 natProject/compCatalog 推导结果一致）
 export const POINT_CATEGORIES = [
   { id: 'noSubsidy', name: '无补贴', color: '#0088ff' },
-  { id: 'subsidy', name: '有补贴', color: '#f5a623' },
+  { id: 'subsidy', name: '已补贴', color: '#f5a623' },
   { id: 'compliance', name: '合规清单', color: '#2fc25b' }
 ]
 
@@ -107,13 +107,13 @@ export function pointCategory(key) {
 
 // projectList 分类规则（业务口径）：
 //   无补贴：natProject != 1（含 0 / null / 空）
-//   有补贴：natProject = 1
+//   已补贴：natProject = 1
 //   合规：  natProject = 1 && compCatalog = 1
-// 合规与有补贴条件重叠，合规更具体，优先判定（每点只归属一个分类）
+// 合规与已补贴条件重叠，合规更具体，优先判定（每点只归属一个分类）
 export function classifyProject(natProject, compCatalog) {
   // 合规：natProject = 1 && compCatalog = 1
   if (Number(natProject) === 1 && Number(compCatalog) === 1) return 'compliance'
-  // 有补贴：natProject = 1
+  // 已补贴：natProject = 1
   if (Number(natProject) === 1) return 'subsidy'
   // 无补贴：natProject != 1
   return 'noSubsidy'
@@ -270,7 +270,7 @@ export const BUILD_FILTERS = [
 ]
 
 // 地图右下角浮动菜单：补贴属性筛选（多选，key 与 station_type 一致）
-export const SUBSIDY_FILTERS = ['无补贴', '有补贴', '合规清单']
+export const SUBSIDY_FILTERS = ['无补贴', '已补贴', '合规清单']
 
 // 地图左下角浮动菜单：结算电价（单选，可再点取消=不选；默认风电）
 // fields 为候选字段列表（按序取第一个有效值）：真实接口可能返回 avgXxx（null）
