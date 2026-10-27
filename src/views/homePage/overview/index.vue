@@ -30,8 +30,8 @@
           @region-click="handleRegionClick"
           @back="handleMapBack"
           @point-click="handlePointClick"
-          @point-more="handlePointMore"
-          @point-detail="handlePointDetail"
+          @handlePointMore="handlePointMore"
+          @handlePointDetail="handlePointDetail"
         />
       </div>
 
@@ -1049,24 +1049,45 @@ export default {
       this.pointDetailLoading = false
     },
     // 卡片「更多>>」：跳转打开该项目对应的详情页面（原型交互13）
-    handlePointMore({ raw, detail }) {
+    // 发电项目（POWER）跳运营侧项目清单，非标项目跳项目侧清单；
+    // projectCode / id 取对应详情对象（powerGenerationDetail / nonStandardDetail）
+    handlePointMore({ detail }) {
       this.$message.info(`跳转项目详情页：模拟`, {
         ...detail
       })
-      window.open(
-        `${window.location.origin}/operational/project-list?mode=detail&projectCode=PPB202609005&pannel=base&id=11704`,
-        '_blank'
-      )
+      const nonStandard = detail.nonStandardDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      const data = detail.projectType === 'POWER' ? power : nonStandard
+      // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
+      const idPart = data.id ? `&id=${data.id}` : ''
+      if (detail.projectType === 'POWER') {
+        window.open(
+          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=base${idPart}`,
+          '_blank'
+        )
+      } else {
+        window.open(
+          `${window.location.origin}/project/project-list?mode=detail&projectCode=${data.projectCode}&pagePanel=base${idPart}`,
+          '_blank'
+        )
+      }
     },
     // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
-    handlePointDetail({ raw, detail }) {
+    handlePointDetail({ detail }) {
       this.$message.info(`跳转运营填报列表页：模拟`, {
         ...detail
       })
-      window.open(
-        `${window.location.origin}/operational/project-list?mode=detail&projectCode=PPB202609005&pannel=operational-data&id=11704`,
-        '_blank'
-      )
+      const nonStandard = detail.nonStandardDetail || {}
+      const power = detail.powerGenerationDetail || {}
+      const data = detail.projectType === 'POWER' ? power : nonStandard
+      // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
+      const idPart = data.id ? `&id=${data.id}` : ''
+      if (detail.projectType === 'POWER') {
+        window.open(
+          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=operational-data${idPart}`,
+          '_blank'
+        )
+      }
     },
     handleMore() {
       this.$message.info('跳转项目清单页')

@@ -908,18 +908,12 @@ export default {
     // 更多>>点击：提取详情数据并传递给父组件
     handlePointMore() {
       const detail = this.pointDetail || {}
-      const nonStandard = detail.nonStandardDetail || {}
-      const power = detail.powerGenerationDetail || {}
-      const detailData = Object.keys(nonStandard).length > 0 ? nonStandard : power
-      this.$emit('point-more', { raw: this.activePoint.raw, detail: detailData })
+      this.$emit('handlePointMore', { raw: this.activePoint.raw, detail: detail })
     },
     // 详情>>点击：提取详情数据并传递给父组件
     handlePointDetail() {
       const detail = this.pointDetail || {}
-      const nonStandard = detail.nonStandardDetail || {}
-      const power = detail.powerGenerationDetail || {}
-      const detailData = Object.keys(nonStandard).length > 0 ? nonStandard : power
-      this.$emit('point-detail', { raw: this.activePoint.raw, detail: detailData })
+      this.$emit('handlePointDetail', { raw: this.activePoint.raw, detail: detail })
     }
   }
 }

@@ -977,11 +977,13 @@ export default {
 }
 
 /* 电子围栏表单输入框红框错误提示 */
+/* 样式穿透统一用 ::v-deep：本项目 dart-sass 1.26 解析不了 /deep/（expected selector），
+   而 :deep() 是 Vue 3 语法，在 Vue 2.6 下会原样输出、被浏览器丢弃 */
 .fence-input-error {
-   /deep/ .el-input__inner {
+  ::v-deep .el-input__inner {
     border-color: #F56C6C !important;
     box-shadow: 0 0 0 2px rgba(245, 108, 108, 0.2) !important;
-    }
+  }
 }
 
 .custom-black-tooltip .BMapGL_Label::after {

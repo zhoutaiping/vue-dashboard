@@ -197,6 +197,7 @@ export default {
     border-radius: 8px;
     background-color: rgba(250,250,250,1);
     border: 1px solid rgba(242,243,245,1);
+    height: 40px;
   }
 
   .metric-item__icon {
