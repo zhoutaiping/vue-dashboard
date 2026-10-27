@@ -1111,7 +1111,6 @@ export default {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 84px);
-  padding: 12px;
   background: #f0f2f5;
   box-sizing: border-box;
   overflow: hidden;
@@ -1120,8 +1119,9 @@ export default {
      工具条的左右内缩、浮层宽度、地图内浮动菜单的让位都取自这里，改一处即可联动 */
   --panel-width: 25%;
   --panel-gutter: 12px;
-  /* 地图内浮动菜单的左右让位：让开左右浮层（25% + 间距），随页面宽度百分比缩放 */
-  --map-side-inset: calc(var(--panel-width) + var(--panel-gutter));
+  /* 地图内浮动菜单的左右让位：要同时让开「浮层外边距 + 浮层宽度 + 浮层与地图的间距」，
+     即 25% + 12px × 2，随页面宽度百分比缩放 */
+  --map-side-inset: calc(var(--panel-width) + var(--panel-gutter) * 2);
   /* 右上角状态筛选的顶部位置：宽屏落在工具条（月份选择器）下方 */
   --map-panel-top: 60px;
 
@@ -1150,9 +1150,9 @@ export default {
   &__toolbar {
     position: absolute;
     top: var(--panel-gutter);
-    /* 让开左右浮层：浮层宽度（25%）+ 间距，跟随浮层宽度自适应 */
-    left: calc(var(--panel-width) + var(--panel-gutter));
-    right: calc(var(--panel-width) + var(--panel-gutter));
+    /* 让开左右浮层：浮层外边距 + 浮层宽度（25%）+ 间距，跟随浮层宽度自适应 */
+    left: calc(var(--panel-width) + var(--panel-gutter) * 2);
+    right: calc(var(--panel-width) + var(--panel-gutter) * 2);
     z-index: 11;
     display: flex;
     align-items: flex-start;
@@ -1179,11 +1179,11 @@ export default {
     }
   }
 
-  /* 左右统计面板浮在地图两侧：宽 25%、高铺满页面主体（100%） */
+  /* 左右统计面板浮在地图两侧：宽 25%，上下左右各让出 12px（大屏不与页面边缘相贴） */
   &__col {
     position: absolute;
-    top: 0;
-    bottom: 0;
+    top: var(--panel-gutter);
+    bottom: var(--panel-gutter);
     z-index: 10;
     display: flex;
     flex-direction: column;
@@ -1205,7 +1205,7 @@ export default {
     }
 
     &--left {
-      left: 0;
+      left: var(--panel-gutter);
       width: var(--panel-width);
       border-radius: 12px;
       background-color: rgba(255,255,255,1);
@@ -1216,7 +1216,7 @@ export default {
     }
 
     &--right {
-      right: 0;
+      right: var(--panel-gutter);
       width: var(--panel-width);
       gap: var(--panel-gutter);
       .panel-card {
@@ -1393,10 +1393,44 @@ export default {
     }
   }
 
+  /* 指标行占死半栏、内容过长只省略不换行：
+     MetricList 的 is-card 变体默认「内容超半行宽时禁止压缩、整项换到单独一行铺满」，
+     右栏只有页面主体 25%（1080P 展开菜单时约 428px），「上网电量 200012.00 万kWh」
+     这类长值会把 3 行撑成 4 行，多占 48px 直接从下方图表里扣，图表高度随数据长短抖动。
+     这里锁死半栏宽 + 标签省略号，6 个指标恒定 3 行；
+     用 .panel-card.summary-card 双类名保证优先级高于 MetricList 自身的
+     .metric-list.is-card .metric-item[data-v-x]，不受样式注入顺序影响 */
+  &.panel-card {
+    ::v-deep .metric-list.is-card .metric-item {
+      flex: 0 0 calc(50% - 8px);
+      min-width: 0;
+      overflow: hidden;
+    }
+  }
+
+  ::v-deep .metric-item {
+    &__main {
+      flex-wrap: nowrap;
+    }
+
+    &__label {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    &__value {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+  }
+
   .hours-chart {
     flex: 1;
-    /* 图表最小高度 100px：卡片剩余高度不足时由上面的 overflow-y: auto 出滚动条 */
-    min-height: 100px;
+    /* 图表最小高度 160px：卡片剩余高度不足时由上面的 overflow-y: auto 出滚动条 */
+    min-height: 160px;
     margin-top: 8px;
     /* 滚动容器内不被压缩到 0，保证图表始终可读 */
     flex-shrink: 0;
@@ -1416,7 +1450,7 @@ export default {
 
   /* 列表换行撑高后，下方图表被压缩时的最小高度（与 .summary-card .hours-chart 保持一致） */
   .chart-bar-line {
-    min-height: 100px;
+    min-height: 160px;
   }
 }
 </style>

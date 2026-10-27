@@ -190,7 +190,7 @@ export default {
             // 行距 5px：5 类目总高约 115px，比之前的 16px 行距紧凑一半，整块仍与环图垂直居中
             itemWidth: 12,
             itemHeight: 12,
-            itemGap: 5,
+            itemGap: 10,
             textStyle: {
               fontSize: 12,
               color: '#606266',

@@ -352,10 +352,13 @@ export default {
     }
   },
   methods: {
-    // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径
+    // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径：
+    // 宽屏有左右浮层 → 让开「浮层外边距 12 + 浮层宽 + 浮层与地图间距 12」；
+    // 窄屏无浮层 → 只留一个 12px 边距
     calcSideInset() {
       const width = this.chart ? this.chart.getWidth() : 0
-      return Math.round(width * this.sideRatio) + SIDE_GUTTER
+      const gutter = this.sideRatio > 0 ? SIDE_GUTTER * 2 : SIDE_GUTTER
+      return Math.round(width * this.sideRatio) + gutter
     },
     // 覆盖 resize mixin：容器尺寸变化后除了重绘，还要重排用 px 定位的颜色图例
     resize() {
