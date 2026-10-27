@@ -127,15 +127,13 @@ export default {
     white-space: nowrap;
 
     &:hover {
-      color: #fff;
-      background-color: rgba(0,136,255,1);
+      // background-color: rgba(0,136,255,1);
       color: rgba(255,255,255,1);
     }
 
     &.is-active:hover {
       color: #fff;
       background-color: rgba(0,136,255,1);
-      color: rgba(255,255,255,1);
     }
 
     /* 置灰态：全部未全选时的"全部"，或已全选时的各行业 */
@@ -144,7 +142,7 @@ export default {
       color: rgba(255,255,255,1);
 
       &:hover {
-        background-color: rgba(0,136,255,1);
+        // background-color: rgba(0,136,255,1);
         color: rgba(255,255,255,1);
       }
     }

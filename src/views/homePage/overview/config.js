@@ -194,11 +194,11 @@ export const OPERATE_METRICS = {
 // 风电/光伏取 powerLineChart（oneMetric=利用小时数）；非标取 nonPowerLineChart（oneMetric=度电收入）；yield=达标率折线
 export const OPERATE_CHART_FIELDS = {
   wind: [
-    { field: 'oneMetric', label: '风电利用小时数', type: 'bar' },
+    { field: 'oneMetric', label: '风电发电利用小时数', type: 'bar' },
     { field: 'yield', label: '达标率', type: 'line' }
   ],
   pv: [
-    { field: 'oneMetric', label: '光伏利用小时数', type: 'bar' },
+    { field: 'oneMetric', label: '光伏发电利用小时数', type: 'bar' },
     { field: 'yield', label: '达标率', type: 'line' }
   ],
   nonstandard: [
