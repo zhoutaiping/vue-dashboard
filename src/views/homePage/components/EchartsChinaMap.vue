@@ -667,6 +667,9 @@ export default {
         tooltip: {
           trigger: 'item',
           confine: true,
+          // 区域气泡内容只有电价：行业筛选不含能源电力时电价维度整体关闭（左下角菜单/图例已隐藏），
+          // 这里连气泡一起关掉，避免悬停出一片空壳（点位详情走独立 HTML 卡片，不依赖 tooltip）
+          show: this.priceOptions.length > 0,
           // 浮层常驻鼠标正上方：水平居中于鼠标，底部留出 province 跟随图标的高度；
           // 上方空间不足时落到鼠标下方，左右再按容器宽度收敛，避免溢出
           position: (point, params, dom, rect, size) => {
@@ -691,6 +694,9 @@ export default {
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
             // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
             if (params.seriesType === 'map' || params.componentType === 'geo') {
+              // 该浮层内容只有电价：行业筛选不含能源电力时电价维度整体关闭
+              // （左下角电价菜单与颜色图例都不渲染），此时不再弹出区域气泡，避免只剩一排无意义的电价
+              if (!this.priceOptions.length) return ''
               const data = this.regionTooltipData[params.name]
               const selected = this.priceOptions.find(o => o.id === this.priceType)
               const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
@@ -843,8 +849,10 @@ export default {
       this.chart.setOption(option, true)
     },
     // tooltip 深色胶囊外壳（原型效果）：所有系列统一包裹
+    // 电价气泡外壳：深色胶囊。圆角 14px ≈ 单行气泡高度的一半，左右两端呈半圆（原型效果）；
+    // 三行（取消电价维度选择时）则为圆角矩形，不会撑成怪异的大胶囊
     wrapTooltip(html) {
-      return `<div style="background: rgba(23, 35, 54, 0.9); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; line-height: 1.7; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); white-space: nowrap;">${html}</div>`
+      return `<div style="background: rgba(23, 35, 54, 0.9); color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12px; line-height: 1.6; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); white-space: nowrap;">${html}</div>`
     },
     handleClick(params) {
       if (params.seriesType === 'scatter') {
