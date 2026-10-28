@@ -69,16 +69,15 @@
         <div class="home-overview__left-scroll">
           <PanelCard title="项目总览" :sub-title="regionTitle" class="panel-block">
             <MetricList :items="overviewMetrics" :columns="2" variant="stat" value-color="#08f" />
-            <!-- 图表类型与原型保持一致（南丁格尔玫瑰 roseType: 'area'）；
-                 可读性通过「半径随容器尺寸自适应」解决，见 ChartPie.pieGeometry -->
+            <!-- 环形图（donut）：各扇区等半径，占比只靠圆心角表达（不传 rose-type），
+                 圆心角/环宽随容器尺寸自适应，见 ChartPie.pieGeometry。
+                 纯展示图表：不监听 item-click，点扇区不会改变顶部行业筛选 -->
             <ChartPie
               :data="pieData"
               :field-map="PIE_FIELD_MAP"
               :colors="pieColors"
               :center-text="pieCenter"
-              rose-type="area"
               :height="pieChartHeight"
-              @item-click="handlePieClick"
             />
           </PanelCard>
 
@@ -181,7 +180,7 @@ import {
   OPERATE_CHART_FIELDS,
   DEFAULT_QUERY,
   ROOT_LEVEL,
-  POWER_CATEGORY_ID,
+  ENERGY_TYPE_KEYS,
   BUILD_FILTERS,
   SUBSIDY_FILTERS,
   PRICE_OPTIONS,
@@ -380,26 +379,16 @@ export default {
       })
       return names
     },
-    // 当前行业筛选是否包含「能源电力」：未选 / 全选（空数组 = 全部）均视为包含
-    hasPowerIndustry() {
-      const sel = this.query.categories || []
-      if (!sel.length) return true
-      return sel.indexOf(POWER_CATEGORY_ID) > -1
-    },
     // 电价维度默认值：菜单首项（风电结算电价）。
     // 电价菜单与行业筛选无关，任何行业组合下都常驻可选
     defaultPriceType() {
       return PRICE_OPTIONS[0].id
     },
-    // 运营项目情况的类型可选项（最少一项，不存在空态）：
-    // 包含能源电力 → 风电/光伏/非标；不包含能源电力 → 仅非标
+    // 运营项目情况的类型可选项：风电/光伏/非标 始终全部可选，与行业筛选无关。
+    // 行业只影响接口入参 industry；某个类型在当前行业下没有项目时，
+    // 该页签自己的数据为空即可，不再靠隐藏页签来表达
     energyTypeOptions() {
-      const keys = this.hasPowerIndustry ? ['wind', 'pv', 'nonstandard'] : ['nonstandard']
-      return keys.map(key => ({ key, label: this.energyLabels[key] }))
-    },
-    // 行业切换后的类型默认值：包含能源电力 → 风电；不包含 → 非标
-    defaultEnergyType() {
-      return this.hasPowerIndustry ? 'wind' : 'nonstandard'
+      return ENERGY_TYPE_KEYS.map(key => ({ key, label: this.energyLabels[key] }))
     },
     // 地图状态筛选（在建/运营多选）→ 接口 status 枚举
     statusParam() {
@@ -514,8 +503,7 @@ export default {
         }))
       }
     },
-    // 排名维度 tabs：全国 4 项（含项目个数），省内 3 项（接口枚举不同）
-    // 受行业筛选影响，见 rankOptionsFor
+    // 排名维度 tabs：全国 4 项（含项目个数），省内 3 项（接口枚举不同），只由层级决定
     rankTypeOptions() {
       return this.rankOptionsFor(this.query.level)
     },
@@ -709,12 +697,7 @@ export default {
       this.fetchRank()
     },
     // 运营项目情况能源类型切换（风电/光伏/非标）：只重新请求运营项目情况，不影响其它报表
-    // 行业切换引发的重置由 fetchAll 统一取数，这里跳过，避免额外请求的序号把整批结果判为过期
     operateEnergyType() {
-      if (this._suppressOperateFetch) {
-        this._suppressOperateFetch = false
-        return
-      }
       this.fetchOperateDetail()
     },
     // 层级切换时兜底校正排名维度：当前维度不在新层级枚举内则回退到首项
@@ -887,37 +870,16 @@ export default {
       const isAll = realIds.length > 0 && realIds.every(id => list.includes(id))
       this.setCategories(isAll ? [] : list)
     },
-    // 行业选中态统一写入口（tab 点击 / 饼图点击）：写入后按规则重置运营类型
+    // 行业选中态统一写入口（tab 点击 / 饼图点击）：只写行业筛选这一个维度。
+    // 运营类型（风电/光伏/非标）、排名维度、电价维度都不跟行业联动，
+    // 各自保留用户的当前选择，由本批 fetchAll 带上新 industry 统一取数
     setCategories(list) {
       this.query.categories = list
-      this.resetEnergyType()
-      // 行业变化会改变排名可选维度（不含能源电力时只剩达标率），需要同步校正
-      this.ensureRankTypeAvailable()
-      // 电价维度不随行业变化：菜单与着色始终保留用户当前选择
     },
-    // 某层级下的排名维度候选（rankTypeOptions 的计算来源）：
-    // 「全部」或包含「能源电力」→ 该层级完整维度；
-    // 只选其它行业（节能环保/智慧能源/绿色交通/其他）→ 装机容量/利用小时数/项目个数
-    // 与该行业口径不匹配，排名只剩「达标率」（接口枚举 rate）
+    // 某层级下的排名维度候选：只由层级决定（全国 4 项 / 省内 3 项），与行业筛选无关。
+    // 行业只影响接口入参 industry；某维度在当前行业下没有数据时，该列显示空即可
     rankOptionsFor(level) {
-      const types = level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
-      return this.hasPowerIndustry ? types : types.filter(t => t.value === 'rate')
-    },
-    // 排名维度校正：当前维度不在可选列表内则回退到首项
-    // （不含能源电力时首项即「达标率」）。由本批 fetchAll 统一取数，
-    // setRankType 会置 _suppressRankFetch，避免多发一次 fetchRank
-    ensureRankTypeAvailable() {
-      const options = this.rankTypeOptions
-      if (!options.length || options.some(t => t.value === this.query.rankType)) return
-      this.setRankType(options[0].value)
-    },
-    // 行业切换 → 重置运营类型：含能源电力取风电，不含取非标
-    // 该重置由本批 fetchAll 携带新类型统一取数，因此抑制 operateEnergyType 的单独请求
-    resetEnergyType() {
-      const target = this.defaultEnergyType
-      if (target === this.operateEnergyType) return
-      this._suppressOperateFetch = true
-      this.operateEnergyType = target
+      return level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
     },
     // 运营项目情况卡片右上角能源类型切换（风电/光伏/非标）
     // 类型最少选中一个：点击当前项不取消，不在可选项内的类型忽略
@@ -959,8 +921,7 @@ export default {
       }
     },
     drillToProvince(code, name, region = '') {
-      // 从全国下钻到省份：排名维度重置为省内首项（正常是「达标率」；
-      // 行业筛选不含能源电力时可选维度只有达标率，同样取首项）
+      // 从全国下钻到省份：排名维度重置为省内首项
       // 省内切换区域（蒙西↔蒙东等）不算重新下钻，保留用户当前维度
       const fromCountry = this.query.level === 'country'
       if (fromCountry) {
@@ -1055,24 +1016,16 @@ export default {
     },
     // 地图「返回」：回到全国视图
     handleMapBack() {
-      // 返回全国：排名维度重置为全国首项（正常是「项目个数」；行业筛选不含能源电力时只剩达标率），
-      // 在 level 变化前写入，保证本批请求携带正确的 rankingType
+      // 返回全国：排名维度重置为全国首项，在 level 变化前写入，
+      // 保证本批请求携带正确的 rankingType
       this.setRankType(this.rankOptionsFor('country')[0].value)
       this.query.level = 'country'
       this.query.provinceCode = ''
       this.query.regionName = ''
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
-      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择；
-      // 行业不含能源电力时复位为空（菜单/图例保持隐藏）
+      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
       this.priceType = this.defaultPriceType
-    },
-    handlePieClick(params) {
-      const target = CATEGORIES.find(c => c.name === params.name)
-      if (target) {
-        // 饼图点击 → 仅选中该行业（多选语义下等价单选），同步按规则重置运营类型
-        this.setCategories([target.id])
-      }
     },
     // 点位点击：详情卡片由地图组件弹出，此处请求项目详情接口并回传给卡片
     // 入参 { industry, month, projectCode, status }（1在建 2运营 3在建和运营 4未选择）

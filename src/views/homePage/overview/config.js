@@ -161,6 +161,9 @@ export const STATUS_TAG_TYPE = {
 // 能源类型 → 展示文案（项目情况卡片右上角切换：风电/光伏/非标）
 export const ENERGY_LABELS = { wind: '风电', pv: '光伏', nonstandard: '非标' }
 
+// 运营项目情况的类型页签顺序（固定三项，不随行业筛选增减）
+export const ENERGY_TYPE_KEYS = ['wind', 'pv', 'nonstandard']
+
 // 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏; 3.非标）
 export const OPERATE_TYPE_MAP = { wind: '1', pv: '2', nonstandard: '3' }
 

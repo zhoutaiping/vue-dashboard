@@ -11,6 +11,8 @@ import resize from '@/components/Charts/mixins/resize'
 const LEGEND_WIDTH = 158
 // 环图与图例之间的留白：扇形右缘不会顶到图例图标上
 const LEGEND_GAP = 20
+// 环形图内径 / 外径：0.42 时环宽 58%，与原型环图的粗细接近；改这一处圆心与 resize 同步生效
+const DONUT_INNER_RATIO = 0.42
 
 /**
  * 通用环形/饼图 / 南丁格尔玫瑰图（纯展示，不含业务）
@@ -103,21 +105,34 @@ export default {
       const width = (this.chart && this.chart.getWidth()) || 0
       const height = (this.chart && this.chart.getHeight()) || 0
       // 首帧未布局：按原设计兜底
-      if (!width || !height) return { centerRatio: this.showLegend ? 0.28 : 0.5, outer: 0 }
+      if (!width || !height) return { centerRatio: this.showLegend ? 0.28 : 0.5, outer: 0, inner: 0 }
       if (!this.showLegend) {
-        return { centerRatio: 0.5, outer: Math.round(Math.max(28, Math.min(width, height) / 2 - 6)) }
+        const outer = Math.round(Math.max(28, Math.min(width, height) / 2 - 6))
+        return { centerRatio: 0.5, outer, inner: Math.round(outer * DONUT_INNER_RATIO) }
       }
       const boxWidth = Math.max(80, width - LEGEND_WIDTH - LEGEND_GAP)
+      const outer = Math.round(Math.max(28, Math.min(boxWidth, height) / 2 - 6))
       return {
         centerRatio: Number((boxWidth / 2 / width).toFixed(4)),
-        outer: Math.round(Math.max(28, Math.min(boxWidth, height) / 2 - 6))
+        outer,
+        inner: Math.round(outer * DONUT_INNER_RATIO)
       }
+    },
+    // 环心数字字号：跟随环内径。内径小时固定 24px 会把洞口填满、数字顶上环壁
+    // （1440 宽时内径仅 27px），按内径 0.6 收缩并限制在 14~24px
+    centerTextSize(geo) {
+      if (!geo.inner) return 24
+      return Math.max(14, Math.min(24, Math.round(geo.inner * 0.6)))
     },
     // 几何 patch：圆心 + 半径（半径按 px 下发，才能突破百分比只按高度计算的上限）
     geometryPatch(geo) {
       const patch = { center: [`${(geo.centerRatio * 100).toFixed(1)}%`, '50%'] }
       // 非环图保持 radius '55%' 的原有视觉，只有环图用 px 半径
-      if (this.donut && geo.outer) patch.radius = [Math.round(geo.outer * 0.42), geo.outer]
+      if (this.donut && geo.outer) {
+        patch.radius = [geo.inner, geo.outer]
+        // 字号随内径一起在 resize 时更新，避免容器变小后中心数字溢出环心
+        patch.label = { fontSize: this.centerTextSize(geo), lineHeight: this.centerTextSize(geo) + 4 }
+      }
       return patch
     },
     // 容器尺寸变化：缩放画布；圆心/半径随新尺寸重算，变化时才 setOption
@@ -213,7 +228,7 @@ export default {
             type: 'pie',
             roseType: this.roseType || false,
             // 环图半径按可用空间算（px），非环图仍用百分比
-            radius: this.donut && geo.outer ? [Math.round(geo.outer * 0.42), geo.outer] : (this.donut ? ['30%', '80%'] : '55%'),
+            radius: this.donut && geo.outer ? [geo.inner, geo.outer] : (this.donut ? ['30%', '80%'] : '55%'),
             center: [`${(geo.centerRatio * 100).toFixed(1)}%`, '50%'],
             // 扇区之间白色缝隙（原型效果）
             itemStyle: {
@@ -226,10 +241,10 @@ export default {
                 show: true,
                 position: 'center',
                 formatter: () => `${this.centerText.value}`,
-                // 环图放大后中心数字同步放大，保持「中心值 ≈ 环宽」的视觉比例
-                fontSize: 24,
+                // 环图放大后中心数字同步放大；内径小时同步收缩，避免数字顶到环壁
+                fontSize: this.centerTextSize(geo),
                 fontWeight: 700,
-                lineHeight: 28,
+                lineHeight: this.centerTextSize(geo) + 4,
                 color: '#303133'
               }
               : { show: false },
