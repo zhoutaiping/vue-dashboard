@@ -1123,7 +1123,7 @@ export default {
         )
       } else {
         window.open(
-          `${window.location.origin}/project/project-list?mode=detail&projectCode=${data.projectCode}&pagePanel=base${idPart}`,
+          `${window.location.origin}/project/project-list?mode=detail&projectCode=${data.projectCode}&pagePanel=Base${idPart}`,
           '_blank'
         )
       }
