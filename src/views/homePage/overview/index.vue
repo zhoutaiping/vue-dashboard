@@ -381,10 +381,10 @@ export default {
       if (!sel.length) return true
       return sel.indexOf(POWER_CATEGORY_ID) > -1
     },
-    // 电价维度默认值：含「能源电力」取菜单首项（风电结算电价）；
-    // 不含时为空 —— 此时无发电项目、无电价数据，左下角电价菜单与颜色图例整体隐藏
+    // 电价维度默认值：菜单首项（风电结算电价）。
+    // 电价菜单与行业筛选无关，任何行业组合下都常驻可选
     defaultPriceType() {
-      return this.hasPowerIndustry ? PRICE_OPTIONS[0].id : ''
+      return PRICE_OPTIONS[0].id
     },
     // 运营项目情况的类型可选项（最少一项，不存在空态）：
     // 包含能源电力 → 风电/光伏/非标；不包含能源电力 → 仅非标
@@ -554,9 +554,6 @@ export default {
     // 真实结算电价数值较小（0.0001~0.3655），0 也是有效值 —— 可解析即入色阶，仅字段缺失保持白色
     // 未选中（priceType 为空）→ 返回空数组，地图不着色（纯白，交互7）
     provincePrices() {
-      // 行业筛选不含「能源电力」：无发电项目、无电价数据，地图不着色
-      // （priceType 已同时清空，左下角颜色图例随之隐藏）
-      if (!this.hasPowerIndustry) return []
       const option = PRICE_OPTIONS.find(o => o.id === this.priceType)
       if (!option) return []
       const toDatum = (name, obj) => {
@@ -699,10 +696,8 @@ export default {
     },
     // 电价菜单（左下角）：全国视图提供全部维度（含标杆电价）；
     // 下钻到省后无市区级标杆数据，菜单去掉标杆电价。
-    // 行业筛选不含「能源电力」时直接返回空数组 —— 无发电项目，电价着色无意义，
-    // 地图组件据此整块隐藏左下角电价菜单（颜色图例由 priceType 为空一并隐藏）
+    // 与行业筛选无关：不选任何发电行业时菜单同样常驻，只是地图可能着不到色
     priceOptions() {
-      if (!this.hasPowerIndustry) return []
       return this.query.level === 'country'
         ? PRICE_OPTIONS
         : PRICE_OPTIONS.filter(o => o.id !== 'benchmark')
@@ -908,13 +903,7 @@ export default {
       this.resetEnergyType()
       // 行业变化会改变排名可选维度（不含能源电力时只剩达标率），需要同步校正
       this.ensureRankTypeAvailable()
-      // 电价维度跟随行业：不含能源电力 → 清空（菜单/图例隐藏、地图不着色）；
-      // 重新包含且当前为空 → 回到默认首项，保留用户原来的电价选择
-      if (!this.hasPowerIndustry) {
-        this.priceType = ''
-      } else if (!this.priceType) {
-        this.priceType = this.defaultPriceType
-      }
+      // 电价维度不随行业变化：菜单与着色始终保留用户当前选择
     },
     // 某层级下的排名维度候选（rankTypeOptions 的计算来源）：
     // 「全部」或包含「能源电力」→ 该层级完整维度；

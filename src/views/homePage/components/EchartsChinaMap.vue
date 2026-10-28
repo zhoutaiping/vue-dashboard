@@ -30,9 +30,8 @@
     </div>
 
     <!-- 左下角：颜色图例由 echarts visualMap 在画布内渲染；此处只保留结算电价菜单（单选，check/uncheck 图标）。
-         行业筛选不含「能源电力」时父级不下发电价维度（priceOptions 为空），整块隐藏，
-         颜色图例也因 priceType 为空随之隐藏，地图回到无色状态 -->
-    <div v-if="priceOptions.length" class="echarts-china-map__panel echarts-china-map__panel--legend">
+         菜单与行业筛选无关，始终展示：不勾选任何电价维度时该维度不着色，菜单本身仍常驻可点 -->
+    <div class="echarts-china-map__panel echarts-china-map__panel--legend">
       <div class="echarts-china-map__price">
         <div
           v-for="item in priceOptions"
@@ -665,9 +664,6 @@ export default {
         tooltip: {
           trigger: 'item',
           confine: true,
-          // 区域气泡内容只有电价：行业筛选不含能源电力时电价维度整体关闭（左下角菜单/图例已隐藏），
-          // 这里连气泡一起关掉，避免悬停出一片空壳（点位详情走独立 HTML 卡片，不依赖 tooltip）
-          show: this.priceOptions.length > 0,
           // 浮层常驻鼠标正上方：水平居中于鼠标，底部留出 province 跟随图标的高度；
           // 上方空间不足时落到鼠标下方，左右再按容器宽度收敛，避免溢出
           position: (point, params, dom, rect, size) => {
@@ -692,9 +688,6 @@ export default {
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
             // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
             if (params.seriesType === 'map' || params.componentType === 'geo') {
-              // 该浮层内容只有电价：行业筛选不含能源电力时电价维度整体关闭
-              // （左下角电价菜单与颜色图例都不渲染），此时不再弹出区域气泡，避免只剩一排无意义的电价
-              if (!this.priceOptions.length) return ''
               const data = this.regionTooltipData[params.name]
               const selected = this.priceOptions.find(o => o.id === this.priceType)
               const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
