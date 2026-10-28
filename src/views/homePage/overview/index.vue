@@ -798,9 +798,21 @@ export default {
     // 项目总览报表：POST queryProjectOverview，入参 = 全局报表参数
     // 项目总览：POST queryProjectOverview，入参 = 全局报表参数（含选中的行业）
     // 指标（建设项目/运营期项目）按选中行业过滤；行业分布由 fetchIndustryStats 单独取全量
+    // 行业「全不选」空态：清空各报表数据（原型注4：数据清空，仅保留筛选器可操作）。
+    // categoryStats（行业 tabs 计数）不清 —— 它是独立快照，清空后筛选器仍需可点
+    clearReportData() {
+      this.overview = {}
+      this.manageList = []
+      this.operateDetail = {}
+      this.rankList = []
+      this.provinceGroups = []
+    },
     async fetchOverview(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
       if (this.isStale(seq)) return
+      // 空态不写回：industry=[] 在后端语义里是「全部」（会返回全量数据），
+      // 全不选时报表必须保持无值，所以照常发请求但不采用其响应
+      if (this.categoryNone) return
       this.overview = data || {}
     },
     // 行业分布（顶部 tabs 计数 + 项目总览饼图）：同一接口但不传行业，
@@ -822,6 +834,7 @@ export default {
     async fetchManageTrend(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryBuildandOperate(this.reportParams), [])
       if (this.isStale(seq)) return
+      if (this.categoryNone) return
       this.manageList = Array.isArray(data) ? data : []
     },
     // 地区排名：全国/省内双接口，返回 [{ nameType, value }] 全称数据
@@ -831,6 +844,7 @@ export default {
       const api = isCountry ? queryNationalRanking : queryRegionRanking
       const data = await this.safeRequest(() => api(this.rankParams), [])
       if (this.isStale(seq)) return
+      if (this.categoryNone) return
       const list = Array.isArray(data) ? data : []
       this.rankList = list.map(item => {
         const fullName = item.nameType || ''
@@ -865,6 +879,7 @@ export default {
       })
       const data = await this.safeRequest(() => queryOperateDetail(params), {})
       if (this.isStale(seq)) return
+      if (this.categoryNone) return
       this.operateDetail = data || {}
     },
 
@@ -890,6 +905,7 @@ export default {
     async fetchMapDisplay(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
       if (this.isStale(seq)) return
+      if (this.categoryNone) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
     },
     // mapDisplay 返回归一化：数组 / 单对象 / 省名 key 映射 → 省份数组
@@ -925,6 +941,9 @@ export default {
     setCategories(list, none = false) {
       this.categoryNone = none
       this.query.categories = list
+      // 进入「全不选」立即清空报表，不等接口返回（industry=[] 会被后端当「全部」，
+      // 其响应不采用，见各 fetch* 里的 categoryNone 守卫）
+      if (none) this.clearReportData()
     },
     // 某层级下的排名维度候选：只由层级决定（全国 4 项 / 省内 3 项），与行业筛选无关。
     // 行业只影响接口入参 industry；某维度在当前行业下没有数据时，该列显示空即可
