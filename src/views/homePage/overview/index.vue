@@ -610,27 +610,12 @@ export default {
       if (hit) return hit.name
       return provinceShortName((this.levels[this.levels.length - 1] || {}).name || '')
     },
-    // 地图点位：按区域 + 右上角状态筛选 + 右下角补贴属性筛选（均为多选）
-    // 区域下钻时接口若按省返回，这里再按地市过滤一遍；后端已按区域返回时该过滤不改变结果
+    // 地图点位：只按右上角状态筛选 + 右下角补贴属性筛选（均为多选）
+    // 不做任何省份/地市归属校验：接口返回的 projectList 全部直接打点。
+    // 归属判断依赖后端入参（provinceName 传省名/区域名、status 传运营/在建），
+    // 前端再按省份名比对只会误删（拆分区域的 provinceName 是区域名，与省名对不上）
     visiblePoints() {
-      const region = this.query.regionName
-      const province = this.currentProvinceShort
       return this.points.filter(p => {
-        // 跨省点位过滤：下钻到某省（含区域）时，projectList 若混入其它省份的项目
-        // （如请求蒙西却返回北京的项目），一律丢弃，避免点位飘在本省地图外。
-        // 注意：下钻拆分省份时接口的 provinceName 就是区域名（蒙西/蒙东、冀北/河北南网，
-        // 见 DRILL_REGION_AS_PROVINCE_NAME），区域名里不含「内蒙古/河北」，
-        // 直接做包含判断会把整批点删掉（表现为「接口有项目返回、地图却不打点」），
-        // 所以先把区域名映射回所属省份再比较
-        if (province && p.provinceName) {
-          const pointRegion = findRegion(p.provinceName)
-          const pointProvince = pointRegion ? pointRegion.province : provinceShortName(p.provinceName)
-          if (String(pointProvince).indexOf(province) < 0) return false
-        }
-        if (region) {
-          const cityRegion = cityRegionName(province, p.cityName)
-          if (cityRegion && cityRegion !== region) return false
-        }
         // 状态筛选：点位未带状态时一律展示。
         // 状态维度已由请求入参 status（由 buildFilter 推导）在服务端过滤，
         // 前端再按缺失字段判断会把整批点位误删（曾表现为「有 projectList 但地图无点」）
