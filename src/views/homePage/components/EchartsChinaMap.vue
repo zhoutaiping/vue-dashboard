@@ -130,6 +130,11 @@ const stripSuffix = name => String(name || '').replace(/(市|盟|地区|自治�
 
 const DEFAULT_COLOR = '#0088ff'
 
+// 地图默认填充率：自适应放大后地图占「可用区域」的比例（留一点边距，
+// 灰色底座比主图大 3%，取 0.98 时底座刚好贴边不溢出）
+const MAP_FILL_RATIO = 0.98
+// 可用区域的上下留白（px）：上方是分类/筛选条，下方是图例与全屏按钮
+const MAP_V_PADDING = 34
 // 浮动菜单距地图边缘的间距（px），与父级样式里的 --panel-gutter 保持一致
 const SIDE_GUTTER = 12
 
@@ -365,6 +370,8 @@ export default {
     resize() {
       if (!this.chart) return
       this.chart.resize()
+      // 尺寸变化后重新自适应放大（比例变了，原来的 zoom 会留白或溢出）
+      this.fitMapZoom()
       const left = this.calcSideInset()
       // 宽度没变时不重复 setOption，避免连续拖拽缩放期间的无谓重绘
       if (left === this._legendLeft) return
@@ -837,6 +844,72 @@ export default {
         series: [this.buildMapSeries(mapName, hasColor)].concat(this.buildSeries())
       }
       this.chart.setOption(option, true)
+      // 每次重绘后按容器比例重新自适应放大（切换省份、全屏、数据刷新都走这里）
+      this.fitMapZoom()
+    },
+    // 地图默认自适应放大：按地图实际绘制包围盒把主图缩放到容器填充率（原型默认铺满）。
+    // 不做这一步时 zoom 固定 0.8，宽屏/窄屏/全屏下地图都缩在中部、四周留大片空白
+    fitMapZoom() {
+      if (!this.chart || this._fitting) return
+      // 按 id 找主图模型：getComponent 的第二个参数只认下标，这里遍历更稳
+      let geoModel = null
+      this.chart.getModel().eachComponent('geo', model => {
+        if (model.id === 'mapMain') geoModel = model
+      })
+      const coord = geoModel && geoModel.coordinateSystem
+      const regions = (coord && coord.regions) || []
+      if (!regions.length) return
+      // 地图经纬包围盒：逐区域手算 min/max（区域 rect 不保证是 BoundingRect 实例，union 会算错）
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      regions.forEach(region => {
+        const rect = typeof region.getBoundingRect === 'function' ? region.getBoundingRect() : null
+        if (!rect || !rect.width || !rect.height) return
+        minX = Math.min(minX, rect.x)
+        minY = Math.min(minY, rect.y)
+        maxX = Math.max(maxX, rect.x + rect.width)
+        maxY = Math.max(maxY, rect.y + rect.height)
+      })
+      if (!isFinite(minX) || !isFinite(maxX)) return
+      // 经纬盒 → 像素：convertToPixel 走的是含 layoutCenter / layoutSize / zoom 的完整变换，
+      // 换成 coord.dataToPoint 拿到的只是投影尺寸，不含布局缩放，会算出离谱的放大倍数
+      const p0 = this.chart.convertToPixel({ geoIndex: 1 }, [minX, minY])
+      const p1 = this.chart.convertToPixel({ geoIndex: 1 }, [maxX, maxY])
+      if (!p0 || !p1) return
+      const usedW = Math.abs(p1[0] - p0[0])
+      const usedH = Math.abs(p1[1] - p0[1])
+      if (!usedW || !usedH) return
+      const option = geoModel.option || {}
+      const zoom = option.zoom || 1
+      const width = this.chart.getWidth()
+      const height = this.chart.getHeight()
+      // 可用区域：左右去掉浮层让位（与颜色图例同口径），上下留出工具栏与底部按钮。
+      // 圆心不一定在容器正中（layoutCenter 纵向 48%），所以按「圆心到四条边界的最小余量」反算，
+      // 而不是直接用容器尺寸，否则放大后一侧仍会压到工具栏
+      const padX = this.calcSideInset()
+      const padY = MAP_V_PADDING
+      const centerX = (p0[0] + p1[0]) / 2
+      const centerY = (p0[1] + p1[1]) / 2
+      const halfW = usedW / 2
+      const halfH = usedH / 2
+      const factor = Math.min(
+        (centerX - padX) / halfW,
+        (width - padX - centerX) / halfW,
+        (centerY - padY) / halfH,
+        (height - padY - centerY) / halfH
+      ) * MAP_FILL_RATIO
+      if (!isFinite(factor) || factor <= 0) return
+      const limit = option.scaleLimit || {}
+      const next = Math.max(limit.min || 0.4, Math.min(limit.max || 2, zoom * factor))
+      if (Math.abs(next - zoom) < 0.01) return
+      // 主图与灰色底座用同一 zoom：两层靠相同 zoom + layoutCenter 偏移保持 3D 错位
+      this._fitting = true
+      this.chart.setOption({
+        geo: [{ id: 'mapShadow', zoom: next }, { id: 'mapMain', zoom: next }]
+      })
+      this._fitting = false
     },
     // tooltip 深色胶囊外壳（原型效果）：所有系列统一包裹
     // 电价气泡外壳：深色胶囊。圆角 14px ≈ 单行气泡高度的一半，左右两端呈半圆（原型效果）；
