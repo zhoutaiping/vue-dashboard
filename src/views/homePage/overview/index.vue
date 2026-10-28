@@ -47,11 +47,16 @@
           />
         </div>
         <div class="home-overview__toolbar-right">
+          <!-- append-to-body 必须关掉：element-ui 默认把日期面板挂到 document.body，
+               而全屏是以 .home-overview 为全屏元素，全屏时 body 上的其它子元素不参与渲染，
+               面板会「点了不出现」（不是被遮挡，是根本不在全屏层里）。
+               关掉后面板留在日期选择器内部，属于全屏元素子树，全屏下照样正常弹出 -->
           <el-date-picker
             v-model="query.month"
             type="month"
             size="small"
             :clearable="false"
+            :append-to-body="false"
             value-format="yyyy-MM"
             placeholder="选择月份"
             style="width: 120px;"

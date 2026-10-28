@@ -307,10 +307,11 @@ export const REGION_PRICE_COMPARE = [
   { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
 ]
 
-// 默认查询月份：当前月的前一个月（yyyy-MM）
+// 默认查询月份：M-4（当前月往前推 4 个月，yyyy-MM）
+// 例：当前 2026-10 → 2026-06。用 new Date(y, m - 4, 1) 由 Date 处理跨年借位，无需手工换算
 const now = new Date()
-const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-const DEFAULT_MONTH = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
+const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 4, 1)
+const DEFAULT_MONTH = `${defaultMonthDate.getFullYear()}-${String(defaultMonthDate.getMonth() + 1).padStart(2, '0')}`
 
 // 默认查询条件
 export const DEFAULT_QUERY = {
