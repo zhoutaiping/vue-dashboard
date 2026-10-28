@@ -205,8 +205,9 @@ export default {
         .reduce((acc, s) => acc.concat(s.data || []), []))
       // 是否配置了轴名/单位：有则多留一行，避免轴名与图例贴字
       const hasAxisName = !!(this.yAxisNames[0] || this.yAxisNames[1])
-      // 顶栏布局：图例 + 右侧单位。按「实测文字宽度」判断居中/靠左/缩字，
-      // 不再用固定宽度阈值 —— 图例项数与名称长度都不同，阈值法在窄栏（如 300px 右栏）会叠字
+      // 顶栏布局：图例始终居中（顶栏视觉重心），右侧单位放得下才显示。
+      // 全部按「实测文字宽度」计算，不用固定阈值 —— 本组件被多张卡片复用，每张卡片只按
+      // 自己的宽度 + 自己的系列名排版，互不影响（不共享任何全局量）
       const chartWidth = (this.chart && this.chart.getWidth()) || 0
       // 记录本次排版所用的宽度：resize() 据此判断宽度是否跨档，需要补一次重绘
       this.legendLayoutWidth = chartWidth
@@ -227,30 +228,30 @@ export default {
       )
       const unitText = this.unit || ''
       const unitWidth = unitText ? textWidth(unitText, 12) : 0
-      // 图例字号/间距三档降级：13/16 → 12/10 → 11/6，逐档试到「图例 + 单位 + 留白」放得下为止
+      // 图例字号/间距三档降级：13/16 → 12/10 → 11/6，逐档试到图例本身放得下为止。
+      // 图例不再「放不下就靠左」：窄栏只缩字号，位置始终居中，避免同一组件在不同卡片里
+      // 一会儿居中一会儿靠左
       const legendTiers = [
         { fontSize: 13, itemGap: 16 },
         { fontSize: 12, itemGap: 10 },
         { fontSize: 11, itemGap: 6 }
       ]
-      let legendFontSize = legendTiers[0].fontSize
-      let legendItemGap = legendTiers[0].itemGap
-      let legendWidthPx = legendWidth(legendFontSize, legendItemGap)
-      // 居中判定：图例居中后左缘 = (W - legendW) / 2、右缘 = (W + legendW) / 2，
-      // 要给右侧单位让开「单位宽 + 4 贴边 + 16 间距」，即 W ≥ 2 × (legendW/2 + unitW + 20)
-      const centeredMinWidth = legendWidthPx + (unitWidth ? unitWidth * 2 + 40 : 24)
-      // 余量够就把图例居中（顶栏视觉重心），不够就靠左，把右侧整段留给单位
-      const legendCentered = !chartWidth || chartWidth >= centeredMinWidth
-      if (!legendCentered && chartWidth) {
-        for (const tier of legendTiers) {
-          legendFontSize = tier.fontSize
-          legendItemGap = tier.itemGap
-          legendWidthPx = legendWidth(legendFontSize, legendItemGap)
-          if (legendWidthPx + unitWidth + 16 <= chartWidth) break
-        }
+      const fitsWidth = value => !chartWidth || value <= chartWidth
+      // 居中后图例两侧各留 (W - legendW) / 2；单位占「单位宽 + 4 贴边 + 8 间距」，
+      // 只有 legendW + 2 × 单位占位 ≤ W 时两者才不会叠字
+      const unitTotal = unitText ? unitWidth + 12 : 0
+      // 第一轮：优先「居中 + 带单位」，从大字号往下找，命中的第一档即最终档
+      let tier = unitText
+        ? legendTiers.find(t => fitsWidth(legendWidth(t.fontSize, t.itemGap) + 2 * unitTotal))
+        : null
+      const showUnit = !!tier
+      // 第二轮：没有单位（或带单位放不下）时，只保证图例本身居中放得下
+      if (!tier) {
+        tier = legendTiers.find(t => fitsWidth(legendWidth(t.fontSize, t.itemGap))) ||
+          legendTiers[legendTiers.length - 1]
       }
-      // 缩到最小档仍会压到单位：让单位让位（图例信息优先），避免两段文案叠在一起
-      const showUnit = !!unitText && (!chartWidth || legendWidthPx + unitWidth + 12 <= chartWidth)
+      const legendFontSize = tier.fontSize
+      const legendItemGap = tier.itemGap
 
       const option = {
         color: this.colors,
@@ -286,8 +287,8 @@ export default {
         legend: this.showLegend
           ? {
             top: 0,
-            // 图例居中（顶栏视觉重心），单位贴右边缘收尾；窄面板下降级为靠左，避免压到单位
-            left: legendCentered ? 'center' : 0,
+            // 图例始终居中（顶栏视觉重心），单位贴右边缘收尾；窄面板只缩字号，不改变居中
+            left: 'center',
             icon: 'roundRect',
             itemWidth: 20,
             itemHeight: 10,
