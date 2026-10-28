@@ -227,6 +227,8 @@ export default {
           {
             type: 'pie',
             roseType: this.roseType || false,
+            // 总值为 0 时不画等分空环（echarts 默认仍会画出一个灰色整环，看起来像有数据）
+            stillShowZeroSum: false,
             // 环图半径按可用空间算（px），非环图仍用百分比
             radius: this.donut && geo.outer ? [geo.inner, geo.outer] : (this.donut ? ['30%', '80%'] : '55%'),
             center: [`${(geo.centerRatio * 100).toFixed(1)}%`, '50%'],

@@ -20,8 +20,9 @@
 /**
  * 通用分类 Tab（纯展示，支持 v-model 单选 / 多选）
  * 字段名通过 fieldMap 自定义：{ label, value, count }
- * 多选模式（multiple）：与"全部"项双向联动——点"全部"全选、点已选中的行业取消该项
- * （全选态下直接对该项生效、"全部"随之回落）、至少保留一项
+ * 多选模式（multiple）：与"全部"项双向联动——点"全部"在全选 / 全不选之间切换、
+ * 点已选中的行业取消该项（全选态下直接对该项生效、"全部"随之回落）、
+ * 支持全不选（空数组 = 空态，由页面侧决定数据与取数）
  */
 export default {
   name: 'CategoryTabs',
@@ -83,15 +84,12 @@ export default {
       }
       let next
       if (item.value === this.allValue) {
-        // 点"全部"：全选所有分类；已全选则不重复触发
-        if (this.isAllSelected) return
-        next = this.realItems.map(i => i.value)
+        // 点"全部"：未全选 → 全选；已全选 → 全不选（空态，页面数据清空、筛选器保留可点）
+        next = this.isAllSelected ? [] : this.realItems.map(i => i.value)
       } else if (this.selectedList.includes(item.value)) {
-        // 点已选中的行业 → 取消该项（全选态下同样生效，取消任意一项后"全部"自动回落为未选中）
-        // 至少保留一项：空数组在页面侧等价于「全部」（industry 传空取全量），
-        // 把最后一项也取消掉会立刻弹回全选，看起来像点击没生效，故忽略该次点击
+        // 点已选中的行业 → 取消该项（全选态下同样生效，取消任意一项后"全部"自动回落为未选中）。
+        // 允许取消最后一项：得到空数组即全不选，由页面侧清空数据
         next = this.selectedList.filter(v => v !== item.value)
-        if (!next.length) return
       } else {
         next = this.selectedList.concat(item.value)
       }

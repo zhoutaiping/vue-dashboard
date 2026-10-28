@@ -71,14 +71,17 @@
             <MetricList :items="overviewMetrics" :columns="2" variant="stat" value-color="#08f" />
             <!-- 环形图（donut）：各扇区等半径，占比只靠圆心角表达（不传 rose-type），
                  圆心角/环宽随容器尺寸自适应，见 ChartPie.pieGeometry。
-                 纯展示图表：不监听 item-click，点扇区不会改变顶部行业筛选 -->
+                 纯展示图表：不监听 item-click，点扇区不会改变顶部行业筛选。
+                 无数据（行业全不选时接口不取数）走空态文案，避免 echarts 画出灰色空环 -->
             <ChartPie
+              v-if="pieData.length"
               :data="pieData"
               :field-map="PIE_FIELD_MAP"
               :colors="pieColors"
               :center-text="pieCenter"
               :height="pieChartHeight"
             />
+            <div v-else class="pie-empty" :style="{ height: pieChartHeight }">暂无数据</div>
           </PanelCard>
 
           <PanelCard title="地区排名" :sub-title="regionTitle" class="panel-block panel-block--flex">
@@ -261,6 +264,10 @@ export default {
       buildFilter: ['运营', '在建'],
       subsidyFilter: ['无补贴', '已补贴', '合规清单'],
       priceType: 'wind',
+      // 行业「全不选」空态标记（原型注4：全部取消时页面数据清空，仅保留筛选器可操作）。
+      // 必须单独用标记而不是靠数组：query.categories 的空数组语义是「全部」（industry 传空取全量），
+      // 「全选」与「全不选」无法用同一个空数组区分
+      categoryNone: false,
 
       query: Object.assign({}, DEFAULT_QUERY),
       // 层级 Tab 数据
@@ -307,12 +314,15 @@ export default {
       if (this.isNarrow) return 0
       return this.layoutMode === 'medium' ? PANEL_WIDTH_RATIO_MEDIUM : PANEL_WIDTH_RATIO
     },
-    // 多选分类 → 刷新键组成部分：空数组 = 全部（'all'），否则逗号拼接的 id 串
+    // 多选分类 → 刷新键组成部分：全不选 = 'none'；空数组 = 全部（'all'），否则逗号拼接的 id 串
     categoryParam() {
+      if (this.categoryNone) return 'none'
       return (this.query.categories || []).join(',') || 'all'
     },
-    // tabs 选中态：空数组（= 全部）映射为全选 id 列表，使「全部」项高亮
+    // tabs 选中态：全不选 → 空数组（含「全部」在内全部不高亮）；
+    // 空数组（= 全部）映射为全选 id 列表，使「全部」项高亮
     categorySelection() {
+      if (this.categoryNone) return []
       const sel = this.query.categories || []
       if (sel.length) return sel
       return (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
@@ -349,7 +359,8 @@ export default {
       return DRILL_REGION_AS_PROVINCE_NAME ? region : this.currentProvinceFullName
     },
     // 全局报表请求参数（单一来源，所有报表接口共用这 4 个字段）
-    // industry: 行业类型数组（多选），元素为行业名（能源电力/节能环保/智慧能源/绿色交通/其他），空数组=全部
+    // industry: 行业类型数组（多选），元素为行业名（能源电力/节能环保/智慧能源/绿色交通/其他）。
+    // 「全部」= 展开后的全部行业名；「全不选」= 空数组（接口据此返回空结果集）
     // month: 查询月份 yyyy-MM
     // provinceName: 省份（下钻省份的接口全称）或拆分区域名，空=全国
     // status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
@@ -368,16 +379,21 @@ export default {
         rankingType: this.query.rankType
       })
     },
-    // 多选行业 → 接口 industry 参数：始终传数组，不做字符串序列化
-    // 全部（未选/全选）→ []；选中若干行业 → ["能源电力","其他"]
+    // 「全部」展开后的行业名数组（也用于行业 tabs 的计数请求，见 fetchIndustryStats）
+    allIndustryNames() {
+      return CATEGORIES.map(c => c.name)
+    },
+    // 多选行业 → 接口 industry 参数：始终传数组，不做字符串序列化。
+    // 全不选 → []（空数组，接口按「无行业」返回，页面随之为空）；
+    // 全部 → 全部行业名；选中若干行业 → 对应行业名
     industryParam() {
+      if (this.categoryNone) return []
       const sel = this.query.categories || []
-      if (!sel.length) return []
-      const names = sel.map(id => {
+      if (!sel.length) return this.allIndustryNames
+      return sel.map(id => {
         const cat = CATEGORIES.find(c => c.id === id)
         return cat ? cat.name : id
       })
-      return names
     },
     // 电价维度默认值：菜单首项（风电结算电价）。
     // 电价菜单与行业筛选无关，任何行业组合下都常驻可选
@@ -768,10 +784,12 @@ export default {
     async fetchIndustryStats(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview({
         ...this.reportParams,
-        industry: []
+        // 计数始终按「全部」口径取：全不选时 industry 为空数组，
+        // 若跟着传空数组会把 tabs 上的行业数量查没，筛选器就点不回去了
+        industry: this.allIndustryNames
       }), {})
       if (this.isStale(seq)) return
-      // 行业 tabs 计数独立保存：分类全部取消选中时页面数据清空，但筛选器需保留供重新选择
+      // 行业 tabs 计数独立保存：分类全部取消选中时页面数据为空，但筛选器需保留供重新选择
       if (data && Array.isArray(data.industryNum) && data.industryNum.length) {
         this.categoryStats = data.industryNum
       }
@@ -827,10 +845,10 @@ export default {
     },
 
     // 全量刷新：一次取数共用同一序号，任一更晚的请求都会让这批结果作废，保证界面与最后一次操作一致
-    // 全量刷新：一次取数共用同一序号，任一更晚的请求都会让这批结果作废，保证界面与最后一次操作一致
     async fetchAll() {
       const seq = this.nextSeq()
       // 前 5 个请求各自写回自己的 data，这里只做并发编排，不依赖返回值
+      // 行业「全不选」同样走这条链路：industry 传空数组，由接口返回空结果集
       await Promise.all([
         this.fetchOverview(seq),
         this.fetchIndustryStats(seq),
@@ -849,7 +867,6 @@ export default {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
       if (this.isStale(seq)) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
-      console.log('this.provinceGroups------', this.provinceGroups)
     },
     // mapDisplay 返回归一化：数组 / 单对象 / 省名 key 映射 → 省份数组
     normalizeProvinceGroups(data) {
@@ -863,17 +880,21 @@ export default {
       }
       return []
     },
-    // 行业多选变更：选中全部真实分类时规范化为空数组（= 全部，industry 传空）
+    // 行业多选变更：选中全部真实分类时规范化为空数组（= 全部，industry 传空）；
+    // 空列表 = 全部取消（空态 none=true：报表数据清空，仅保留筛选器）
     handleCategoryChange(next) {
       const list = Array.isArray(next) ? next : []
       const realIds = (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
       const isAll = realIds.length > 0 && realIds.every(id => list.includes(id))
-      this.setCategories(isAll ? [] : list)
+      this.setCategories(isAll ? [] : list, !list.length)
     },
-    // 行业选中态统一写入口（tab 点击 / 饼图点击）：只写行业筛选这一个维度。
+    // 行业选中态统一写入口：只写行业筛选这一个维度。
     // 运营类型（风电/光伏/非标）、排名维度、电价维度都不跟行业联动，
-    // 各自保留用户的当前选择，由本批 fetchAll 带上新 industry 统一取数
-    setCategories(list) {
+    // 各自保留用户的当前选择，由本批 fetchAll 带上新 industry 统一取数。
+    // none：是否为「全不选」空态 —— query.categories 为空数组时既可能是全选
+    // （industry 传空取全量）也可能是全不选，二者必须靠该参数区分
+    setCategories(list, none = false) {
+      this.categoryNone = none
       this.query.categories = list
     },
     // 某层级下的排名维度候选：只由层级决定（全国 4 项 / 省内 3 项），与行业筛选无关。
@@ -1438,5 +1459,15 @@ export default {
   .chart-bar-line {
     min-height: 160px;
   }
+}
+
+/* 项目总览环图空态（行业全不选时无数据）：与排名列表的空态文案保持一致，
+   高度跟环图一致，避免面板高度跳动 */
+.pie-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+  font-size: 13px;
 }
 </style>
