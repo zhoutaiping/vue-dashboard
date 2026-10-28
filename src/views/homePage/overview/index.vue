@@ -445,8 +445,10 @@ export default {
     },
     // 饼图容器高度按数据行数自适应：行多时撑高（左栏内容区可滚动），避免图例挤压显示不完善
     pieChartHeight() {
+      // 高度只需容纳右侧图例（每行 28px）+ 上下留白：环图直径按容器宽算（原型比例），
+      // 不再需要靠拉高容器把环撑大，收紧后与原型卡片比例一致
       const rows = (this.pieData || []).length
-      return Math.max(190, rows * 38 + 30) + 'px'
+      return Math.max(160, rows * 28 + 30) + 'px'
     },
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
     summaryMetrics() {

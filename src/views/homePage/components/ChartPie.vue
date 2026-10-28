@@ -8,11 +8,16 @@ import resize from '@/components/Charts/mixins/resize'
 
 // 右侧竖向图例占用的宽度（px）：图标 12 + 间距 5 + label 62 + 「1136个(38%)」约 79 ≈ 158
 // 环形图圆心按「容器宽 - 图例宽」剩余空间居中，宽度越窄圆心越靠左
-const LEGEND_WIDTH = 158
+const LEGEND_WIDTH = 140
 // 环图与图例之间的留白：扇形右缘不会顶到图例图标上
 const LEGEND_GAP = 20
-// 环形图内径 / 外径：0.42 时环宽 58%，与原型环图的粗细接近；改这一处圆心与 resize 同步生效
-const DONUT_INNER_RATIO = 0.42
+// 环形图内径 / 外径：0.72 时环带较细，与原型环图粗细一致；改这一处圆心与 resize 同步生效
+const DONUT_INNER_RATIO = 0.72
+// 环形图外径 / 容器宽：原型环图直径约为卡片宽的 1/3（480 宽的原型里环约 158），
+// 图例占右半区，环图只占左半区，改这一处即可整体缩放
+const DONUT_OUTER_RATIO = 0.34
+// 环心横坐标 / 容器宽：原型里环图在左半区居中（0.25），右侧留给图例
+const DONUT_CENTER_RATIO = 0.25
 
 /**
  * 通用环形/饼图 / 南丁格尔玫瑰图（纯展示，不含业务）
@@ -105,24 +110,29 @@ export default {
       const width = (this.chart && this.chart.getWidth()) || 0
       const height = (this.chart && this.chart.getHeight()) || 0
       // 首帧未布局：按原设计兜底
-      if (!width || !height) return { centerRatio: this.showLegend ? 0.28 : 0.5, outer: 0, inner: 0 }
+      if (!width || !height) return { centerRatio: this.showLegend ? DONUT_CENTER_RATIO : 0.5, outer: 0, inner: 0 }
       if (!this.showLegend) {
-        const outer = Math.round(Math.max(28, Math.min(width, height) / 2 - 6))
+        const outer = Math.round(Math.max(28, Math.min(width * DONUT_OUTER_RATIO, height) / 2 - 6))
         return { centerRatio: 0.5, outer, inner: Math.round(outer * DONUT_INNER_RATIO) }
       }
+      // 三重约束取最小：原型比例（宽度主导）、可用高度、图例左侧的剩余空间
       const boxWidth = Math.max(80, width - LEGEND_WIDTH - LEGEND_GAP)
-      const outer = Math.round(Math.max(28, Math.min(boxWidth, height) / 2 - 6))
+      const outer = Math.round(Math.max(24, Math.min(
+        (width * DONUT_OUTER_RATIO) / 2,
+        boxWidth / 2,
+        height / 2 - 6
+      )))
       return {
-        centerRatio: Number((boxWidth / 2 / width).toFixed(4)),
+        centerRatio: DONUT_CENTER_RATIO,
         outer,
         inner: Math.round(outer * DONUT_INNER_RATIO)
       }
     },
-    // 环心数字字号：跟随环内径。内径小时固定 24px 会把洞口填满、数字顶上环壁
-    // （1440 宽时内径仅 27px），按内径 0.6 收缩并限制在 14~24px
+    // 环心数字字号：跟随内径缩放。环图按原型比例变小后，固定 24px 会把洞口填满、
+    // 数字顶上环壁，这里限制在 13~20px
     centerTextSize(geo) {
-      if (!geo.inner) return 24
-      return Math.max(14, Math.min(24, Math.round(geo.inner * 0.6)))
+      if (!geo.inner) return 20
+      return Math.max(13, Math.min(20, Math.round(geo.inner * 0.34)))
     },
     // 几何 patch：圆心 + 半径（半径按 px 下发，才能突破百分比只按高度计算的上限）
     geometryPatch(geo) {
