@@ -581,9 +581,8 @@ export default {
           .map(group => toDatum(this.resolveGroupName(group), group))
           .filter(d => d && d.name)
       }
-      // 省份下钻：mapDisplay 返回 cityPriceList（名称与地图区域一致）
-      const group = this.provinceGroups[0] || {}
-      const cities = this.regionCityList(group)
+      // 省份下钻：地市条目兼容「cityPriceList」与「地市 key 映射」两种返回，见 provinceCityEntries
+      const cities = this.provinceCityEntries
       // 已下钻到具体区域（蒙西/蒙东等）：地图只画本区域地市，按城市粒度逐城着色
       if (this.query.regionName) {
         return cities.map(c => toDatum(c.name, c)).filter(d => d && d.name)
@@ -611,6 +610,32 @@ export default {
         .filter(Boolean)
       if (!splitProvinces.length) return groups
       return groups.filter(group => splitProvinces.indexOf(this.rawGroupName(group)) < 0)
+    },
+
+    // 省级下钻的地市条目：把两种返回形态统一成 [{ name: 地市名, ...电价字段, projectList }]
+    //   1. 单个省分组 + cityPriceList（本地 mock / 早期后端：地市明细单独放在 cityPriceList）
+    //   2. 与全国同构的「地市 → 数据」映射（现网后端：归一化后每个地市一个分组，key 即地市名）
+    // 区域下钻（蒙西/蒙东、冀北/河北南网）时只保留属于该区域的地市：
+    // 后端已按区域返回时该过滤不改变结果，按省返回时由前端过滤掉其它区域
+    provinceCityEntries() {
+      const groups = this.provinceGroups || []
+      const single = groups.length === 1 ? groups[0] : null
+      const useCityPriceList = single && Array.isArray(single.cityPriceList) && single.cityPriceList.length > 0
+      const list = useCityPriceList
+        ? single.cityPriceList.map(c => Object.assign({ projectList: [] }, c))
+        : groups.map(group => Object.assign({}, group, {
+          // 地市名取分组 key（与地图 GeoJSON 区域名一致，不能做省名式的短名截断）
+          name: group._groupKey || group.provinceName || '',
+          // 分组里没有 projectCount：与 cityPriceList 字段对齐，浮层显示项目数
+          projectCount: (group.projectList || []).length
+        }))
+      const region = this.query.regionName
+      if (!region) return list
+      const province = this.currentProvinceShort
+      return list.filter(c => {
+        const cityRegion = cityRegionName(province, c.name)
+        return !cityRegion || cityRegion === region
+      })
     },
     // 当前下钻省份的短名（内蒙古/河北…），用于地区分类映射；全国视图为空
     currentProvinceShort() {
@@ -641,8 +666,7 @@ export default {
     provincePriceMap() {
       const map = {}
       if (this.query.level === 'province') {
-        const group = this.provinceGroups[0] || {}
-        const cities = this.regionCityList(group)
+        const cities = this.provinceCityEntries
         if (this.query.regionName) {
           cities.forEach(c => {
             map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
@@ -875,8 +899,13 @@ export default {
         const looksLikeSingleGroup = data.projectList || data.cityPriceList ||
           data.avgSettlementPrice !== undefined || data.avgWindSettlementPrice !== undefined
         if (looksLikeSingleGroup) return [data]
-        // 省名 key 映射：把 key 补成 provinceName（项目条目内也有 provinceName，二者一致）
-        return Object.keys(data).map(key => Object.assign({ provinceName: key }, data[key]))
+        // key 映射：全国是全国→省/区域，省级下钻是地市→数据（返回结构与全国完全一致）。
+        // key 即分组名，必须覆盖内层字段 —— 内层的 provinceName 可能写的是省全称/长地名，
+        // 直接用它会把「玉溪市」这类地市分组统统认成「云南省」，地市着色与浮层就都挂不上
+        return Object.keys(data).map(key => Object.assign({}, data[key], {
+          provinceName: key,
+          _groupKey: key
+        }))
       }
       return []
     },
@@ -990,23 +1019,11 @@ export default {
       const short = this.rawGroupName(group)
       return normalizeRegionName(short) || short
     },
-    // 下钻层级的地市列表：区域下钻时只保留本区域的地市
-    // 后端按区域返回时该过滤不改变结果；按省返回时由前端过滤掉其它区域
-    regionCityList(group) {
-      const cities = Array.isArray(group && group.cityPriceList) ? group.cityPriceList : []
-      const region = this.query.regionName
-      if (!region) return cities
-      const province = this.currentProvinceShort
-      return cities.filter(c => {
-        const cityRegion = cityRegionName(province, c.name)
-        return !cityRegion || cityRegion === region
-      })
-    },
     // 城市列表 → 各拆分区域的均价（电价取平均；0 也是有效结算价，仅不可解析/负值不参与）
     regionAvgMap(cities, fields) {
       const sum = {}
       const count = {}
-      ;(cities || []).forEach(c => {
+        ; (cities || []).forEach(c => {
         const region = cityRegionName(this.currentProvinceShort, c.name)
         if (!region) return
         const raw = pickPriceValue(c, fields)
@@ -1115,7 +1132,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-
 ::v-deep .el-input__inner {
   height: 30px;
   line-height: 30px;
@@ -1195,7 +1211,7 @@ export default {
     pointer-events: none;
 
     /* 工具条内的控件可点击，其余区域不拦截地图交互 */
-    > * {
+    >* {
       pointer-events: auto;
     }
 
@@ -1242,8 +1258,8 @@ export default {
       left: var(--panel-gutter);
       width: var(--panel-width);
       border-radius: 12px;
-      background-color: rgba(255,255,255,1);
-      box-shadow: 0px 0px 16px 0px rgba(0,0,0,0.05);
+      background-color: rgba(255, 255, 255, 1);
+      box-shadow: 0px 0px 16px 0px rgba(0, 0, 0, 0.05);
       font-family: Arial-regular;
       /* 左栏：内容区滚动，底部备注固定不被遮挡 */
       overflow: hidden;
@@ -1253,12 +1269,14 @@ export default {
       right: var(--panel-gutter);
       width: var(--panel-width);
       gap: var(--panel-gutter);
+
       .panel-card {
         border-radius: 12px;
-        background-color: rgba(255,255,255,1);
-        box-shadow: 0px 0px 16px 0px rgba(0,0,0,0.05);
+        background-color: rgba(255, 255, 255, 1);
+        box-shadow: 0px 0px 16px 0px rgba(0, 0, 0, 0.05);
         font-family: Arial-regular;
       }
+
       /* 低分辨率（1080P）兼容：运营项目情况面板只保一个可用下限，
          不被压成 0；内容超出由面板自身滚动承载（见底部 .summary-card），不顶出整列 */
       .summary-card {
@@ -1297,7 +1315,7 @@ export default {
     padding: 6px 10px;
     font-size: 12px;
     line-height: 1.5;
-    color: rgba(230,162,60,1);
+    color: rgba(230, 162, 60, 1);
     font-size: 12px;
     text-align: left;
     font-family: PingFangSC-regular;

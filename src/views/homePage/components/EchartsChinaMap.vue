@@ -707,16 +707,17 @@ export default {
                   const hasSpot = spot !== null
                   const vn = Number(v)
                   const sn = Number(spot)
-                  let diffHtml = '<span style="color:#909399;">--</span>'
-                  if (hasV && hasSpot && !isNaN(vn) && !isNaN(sn)) {
-                    const diff = Math.round((vn - sn) * 100) / 100
-                    if (diff > 0) {
-                      diffHtml = `<span style="color:#2fc25b;">${diff.toFixed(2)}↓</span>`
-                    } else if (diff < 0) {
-                      diffHtml = `<span style="color:#f56c6c;">${diff.toFixed(2)}↑</span>`
-                    } else {
-                      diffHtml = '<span style="color:#909399;">0.00</span>'
-                    }
+                  // 差值所需字段为 null / 空（pickPriceValue 已把 "" 归一为 null）时无法计算，
+                  // 直接不渲染括号，避免出现「0（--）」这种空括号
+                  if (!hasV || !hasSpot || isNaN(vn) || isNaN(sn)) return priceHtml
+                  const diff = Math.round((vn - sn) * 100) / 100
+                  let diffHtml
+                  if (diff > 0) {
+                    diffHtml = `<span style="color:#2fc25b;">${diff.toFixed(2)}↓</span>`
+                  } else if (diff < 0) {
+                    diffHtml = `<span style="color:#f56c6c;">${diff.toFixed(2)}↑</span>`
+                  } else {
+                    diffHtml = '<span style="color:#909399;">0.00</span>'
                   }
                   return `${priceHtml}（${diffHtml}）`
                 })
