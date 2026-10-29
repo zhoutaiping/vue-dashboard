@@ -1016,6 +1016,10 @@ export default {
       }
       this.query.level = 'province'
       this.query.provinceCode = code
+      // 地图点位来自 provinceGroups：省份 GeoJSON 会先于接口数据落地，
+      // 下钻瞬间若不清空，全国的点会被画到省地图上（错位、跳一下再回来）。
+      // 先清空，等本批 queryMapDisplay 返回后一次性渲染，全过程无动画
+      this.provinceGroups = []
       // 区域下钻：记录业务区域，驱动地图只画该区域地市、接口按区域取数
       this.query.regionName = region || ''
       this.query.cityCode = ''
@@ -1099,6 +1103,8 @@ export default {
       this.query.regionName = ''
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
+      // 同下钻：先清空地图点位来源，避免省内点位被画到全国图上
+      this.provinceGroups = []
       // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
       this.priceType = this.defaultPriceType
     },

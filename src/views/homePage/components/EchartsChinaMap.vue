@@ -138,6 +138,9 @@ const MAP_FILL_RATIO = 0.98
 const MAP_V_PADDING = 34
 // 浮动菜单距地图边缘的间距（px），与父级样式里的 --panel-gutter 保持一致
 const SIDE_GUTTER = 12
+// 省份 GeoJSON 未到位时「加载中遮罩」的延迟出现阈值（ms）：
+// 加载通常几十毫秒完成，立刻铺遮罩会让下钻闪一层灰；超过该时长才显示，真正慢加载仍有反馈
+const MAP_LOADING_DELAY = 250
 
 /**
  * 通用 echarts 2D 中国地图（打点 / 悬浮卡片 / 分类图例显隐 / 全屏）
@@ -347,6 +350,10 @@ export default {
     }
   },
   beforeDestroy() {
+    if (this._maskTimer) {
+      clearTimeout(this._maskTimer)
+      this._maskTimer = null
+    }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect()
       this.resizeObserver = null
@@ -523,7 +530,10 @@ export default {
         this.renderOption()
         return
       }
-      this.loading = true
+      // 加载遮罩延时出现：省份 GeoJSON 是本地 chunk，通常几十毫秒就到位，
+      // 立刻铺遮罩会在下钻瞬间闪一层灰（地图越流畅越明显）；超过阈值才显示，慢加载仍有反馈。
+      // 与 finally 里的 loading=false 配合，保证遮挡时间 = 加载耗时 - 阈值
+      this._maskTimer = setTimeout(() => { this.loading = true }, MAP_LOADING_DELAY)
       try {
         // 本地 GeoJSON 位于 src/assets/maps/{code}.json（scripts/download-map-data.js 下载，文件名去掉 _full）
         // 走静态映射表（map/index.js）：
@@ -546,6 +556,8 @@ export default {
         console.error('省份地图加载失败:', error)
         this.$message.error('省份地图加载失败')
       } finally {
+        clearTimeout(this._maskTimer)
+        this._maskTimer = null
         this.loading = false
       }
     },
