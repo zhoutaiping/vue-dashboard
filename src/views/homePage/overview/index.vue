@@ -660,6 +660,9 @@ export default {
     // 归属判断依赖后端入参（provinceName 传省名/区域名、status 传运营/在建），
     // 前端再按省份名比对只会误删（拆分区域的 provinceName 是区域名，与省名对不上）
     visiblePoints() {
+      // 行业「全不选」：地图照常取数（省份热力/电价着色正常），但不标记任何项目点位；
+      // 下钻到省份同样不标点（同一份 points 派生）
+      if (this.categoryNone) return []
       return this.points.filter(p => {
         // 状态筛选：点位未带状态时一律展示。
         // 状态维度已由请求入参 status（由 buildFilter 推导）在服务端过滤，
@@ -916,10 +919,11 @@ export default {
     //   1. 数组 [{ provinceName, projectList, ... }]
     //   2. 单对象（省份下钻：{ projectList, cityPriceList, ... }）
     //   3. 省名 → 数据的对象映射（真实接口形态：{ 上海市: {...}, 天津市: {...} }）
+    // 行业「全不选」照常写回：省份热力 / 电价着色要正常显示，
+    // 只是点位不标（由 visiblePoints 早退回空数组控制）
     async fetchMapDisplay(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
       if (this.isStale(seq)) return
-      if (this.categoryNone) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
     },
     // mapDisplay 返回归一化：数组 / 单对象 / 省名 key 映射 → 省份数组
