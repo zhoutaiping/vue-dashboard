@@ -3,7 +3,6 @@
     <div v-for="(item, index) in normalizedItems" :key="index" class="metric-item">
       <div v-if="showIcon && item.icon" class="metric-item__icon">
         <img :src="item.icon" alt="">
-        <!-- <i v-else :class="item.icon" /> -->
       </div>
       <div class="metric-item__main">
         <div class="metric-item__label">
@@ -62,9 +61,6 @@ export default {
         }
       })
     }
-  },
-  methods: {
-    //
   }
 }
 </script>

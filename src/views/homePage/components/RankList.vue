@@ -25,10 +25,7 @@
         <div class="rank-item__content">
           <div class="rank-item__top">
             <span class="rank-item__name" :title="item.name">{{ item.name }}</span>
-            <span class="rank-item__value" :class="rankClass(index)">
-              {{ item.text }}
-              <!-- <em v-if="unit">{{ unit }}</em> -->
-            </span>
+            <span class="rank-item__value" :class="rankClass(index)">{{ item.text }}</span>
           </div>
           <div class="rank-item__bar">
             <i
@@ -64,7 +61,6 @@ export default {
       type: Object,
       default: () => ({ name: 'name', value: 'value', code: 'code' })
     },
-    unit: { type: String, default: '' },
     // 条形颜色，传入则覆盖默认渐变（一般不传，用内置名次配色）
     barColor: { type: String, default: '' },
     max: { type: Number, default: 0 },
@@ -112,6 +108,11 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* 前三名配色：徽章描边 / 数值 / 进度条三处共用，改这里三处同步生效 */
+$rank-1: #e63c3c;
+$rank-2: #f57f24;
+$rank-3: #f2c320;
+
 .rank-list {
   display: flex;
   flex-direction: column;
@@ -221,21 +222,21 @@ export default {
   &.is-rank-1 {
     border-radius: 4px;
     background: linear-gradient(180deg, rgba(255, 64, 66, 0.4) 0%, rgba(255, 64, 66, 0.1) 97%);
-    border-top: 3px solid #e63c3c;
-    color: #e63c3c;
+    border-top: 3px solid $rank-1;
+    color: $rank-1;
   }
 
   &.is-rank-2 {
-    background: linear-gradient(135deg, #ffb266, #f57f24);
-    color: #f57f24;
     border-radius: 4px;
     background: linear-gradient(180deg, rgba(255, 108, 0, 0.4) 0%, rgba(255, 108, 0, 0.1) 100%);
-    border-top: 3px solid #f57f24;
+    border-top: 3px solid $rank-2;
+    color: $rank-2;
   }
 
   &.is-rank-3 {
     border-radius: 4px;
     background: linear-gradient(180deg, rgba(255, 209, 86, 0.4) 0%, rgba(255, 209, 86, 0.1) 100%);
+    /* 徽章比数值色略深（#f0c020 vs $rank-3）：黄色在浅底描边上需要更实一点 */
     border-top: 3px solid #f0c020;
     color: #f0c020;
   }
@@ -273,23 +274,15 @@ export default {
   color: #303133;
 
   &.is-rank-1 {
-    color: #e63c3c;
+    color: $rank-1;
   }
 
   &.is-rank-2 {
-    color: #f57f24;
+    color: $rank-2;
   }
 
   &.is-rank-3 {
-    color: #f2c320;
-  }
-
-  em {
-    font-style: normal;
-    font-size: 12px;
-    font-weight: 400;
-    color: #909399;
-    margin-left: 2px;
+    color: $rank-3;
   }
 }
 
@@ -309,17 +302,15 @@ export default {
   background: linear-gradient(90deg, #9cc3ff, #2f7bf5);
 
   &.is-rank-1 {
-    background: linear-gradient(90deg, #ff9c8f, #e63c3c);
+    background: linear-gradient(90deg, #ff9c8f, $rank-1);
   }
 
   &.is-rank-2 {
-    background: linear-gradient(90deg, #ffbe7a, #f57f24);
-
+    background: linear-gradient(90deg, #ffbe7a, $rank-2);
   }
 
   &.is-rank-3 {
-    background: linear-gradient(90deg, #ffe38f, #f2c320);
-
+    background: linear-gradient(90deg, #ffe38f, $rank-3);
   }
 }
 </style>

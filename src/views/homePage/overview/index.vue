@@ -94,7 +94,6 @@
               :tabs="rankTypeOptions"
               :active-tab="query.rankType"
               :field-map="RANK_FIELD_MAP"
-              :unit="currentRankUnit"
               @update:activeTab="handleRankTypeChange"
               @row-click="handleRankClick"
             />
@@ -244,14 +243,11 @@ export default {
   data() {
     return {
       // 静态配置（模板中直接引用）
-      CATEGORIES,
       CATEGORY_FIELD_MAP,
-      RANK_TYPES,
       RANK_FIELD_MAP,
       POINT_FIELD_MAP,
       PIE_FIELD_MAP,
       MANAGE_COLORS,
-      energyLabels: ENERGY_LABELS,
       // 地图浮动菜单配置
       buildOptions: BUILD_FILTERS,
       subsidyOptions: SUBSIDY_FILTERS,
@@ -419,7 +415,7 @@ export default {
     // 行业只影响接口入参 industry；某个类型在当前行业下没有项目时，
     // 该页签自己的数据为空即可，不再靠隐藏页签来表达
     energyTypeOptions() {
-      return ENERGY_TYPE_KEYS.map(key => ({ key, label: this.energyLabels[key] }))
+      return ENERGY_TYPE_KEYS.map(key => ({ key, label: ENERGY_LABELS[key] }))
     },
     // 地图状态筛选（在建/运营多选）→ 接口 status 枚举
     statusParam() {
@@ -458,7 +454,6 @@ export default {
     pieData() {
       return (this.overview.industryNum || []).filter(item => item.industry !== INDUSTRY_ALL)
     },
-    // 饼图容器高度按数据行数自适应：行多时撑高（左栏内容区可滚动），避免图例挤压显示不完善
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
     summaryMetrics() {
       const conf = OPERATE_METRICS[this.operateEnergyType] || OPERATE_METRICS.wind
@@ -499,12 +494,10 @@ export default {
         }))
       }
     },
-    // 图表双 Y 轴名称（左轴 = 柱系列指标，右轴 = 折线达标率）
-    // 统一写成「指标(单位)」：只写「小时」这类单位在图上会变成一个孤立小字，看不出是什么指标
+    // 双 Y 轴名称：原型里风电/光伏为「利用小时数(h)」「达标率(%)」、非标为「度电收入(元/kWh)」「达标率(%)」。
+    // 当前系列已自带单位，轴名暂不展示（传空数组 = 两侧轴名都为空）
     operateChartYAxis() {
-      return this.operateEnergyType === 'nonstandard'
-        ? [] // ['度电收入(元/kWh)', '达标率(%)']
-        : [] // ['利用小时数(h)', '达标率(%)']
+      return []
     },
     // 饼图配色按行业名匹配，与数据顺序解耦
     pieColors() {
@@ -534,81 +527,33 @@ export default {
     rankTypeOptions() {
       return this.rankOptionsFor(this.query.level)
     },
-    currentRankUnit() {
-      const target = this.rankTypeOptions.find(t => t.value === this.query.rankType)
-      return target ? target.unit : ''
-    },
     layerOptions() {
       return CATEGORIES.map(c => ({ key: c.id, label: c.name, color: c.color }))
     },
     // 地图点位：provinceGroups.projectList 平铺归一化
     // 分类按业务口径推导：合规 natProject=1 && compCatalog=1（优先）；已补贴 natProject=1；其余无补贴 natProject!=1
     points() {
-      const list = []
-      this.provinceGroups.forEach(group => {
-        (group.projectList || []).forEach(item => {
-          const catId = classifyProject(item.natProject, item.compCatalog)
-          const cat = pointCategory(catId)
-          list.push(Object.assign({}, item, {
-            id: item.projectCode,
-            name: item.projectName,
-            // 经纬度兼容逗号小数（"110,807"→110.807）；无效坐标由地图组件丢弃该点
-            lng: toCoordNumber(item.longitude),
-            lat: toCoordNumber(item.latitude),
-            category: cat.id,
-            // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴/合规清单）
-            categoryName: cat.name,
-            subsidy: cat.name,
-            // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），
-            // 这里不做「在建」兜底——兜底会让所有点在只勾选「显示运营」时被前端二次过滤掉
-            status: item.status || ''
-          }))
-        })
-      })
-      return list
+      return this.provinceGroups.reduce(
+        (list, group) => list.concat((group.projectList || []).map(item => this.toPoint(item))),
+        []
+      )
     },
+
     // 地图着色数据：按左下角选中的电价维度取聚合值
     // 全国视图 → 各省汇总值；省份下钻 → 该省各市区值（按市区粒度着色，visualMap 随之展示）
-    // 取值兼容：字段候选列表（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.4155"）；
-    // 电价取值兼容：字段候选（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.3655"）；
-    // 真实结算电价数值较小（0.0001~0.3655），0 也是有效值 —— 可解析即入色阶，仅字段缺失保持白色
+    // 取值兼容：字段候选列表（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.3655"）；
     // 未选中（priceType 为空）→ 返回空数组，地图不着色（纯白，交互7）
     provincePrices() {
       const option = PRICE_OPTIONS.find(o => o.id === this.priceType)
       if (!option) return []
-      const toDatum = (name, obj) => {
-        const raw = pickPriceValue(obj, option.fields)
-        const num = raw === null ? NaN : Number(raw)
-        // 真实结算电价可能是小数值（0.0001~0.3655），0 也是有效结算价：
-        // 只要可解析且 >= 0 就入色阶（visualMap min/max 按数据自适应拉开对比）；
-        // 仅字段缺失（null/空/不可解析）视为无数据保持白色
-        if (!name || isNaN(num) || num < 0) return null
-        return { name, value: num }
-      }
+      // 全国层级：后端按区域返回（蒙西/蒙东、冀北/河北南网），区域的汇总电价直接取分组字段，
+      // 与其它省份走同一套取值逻辑；countryGroups 已剔除被区域替换掉的整省分组
       if (this.query.level === 'country') {
-        // 全国层级：后端按区域返回（蒙西/蒙东、冀北/河北南网），区域的汇总电价直接取分组字段，
-        // 与其它省份走同一套取值逻辑；countryGroups 已剔除被区域替换掉的整省分组
         return this.countryGroups
-          .map(group => toDatum(this.resolveGroupName(group), group))
-          .filter(d => d && d.name)
+          .map(group => this.priceDatum(this.resolveGroupName(group), group, option.fields))
+          .filter(Boolean)
       }
-      // 省份下钻：地市条目兼容「cityPriceList」与「地市 key 映射」两种返回，见 provinceCityEntries
-      const cities = this.provinceCityEntries
-      // 已下钻到具体区域（蒙西/蒙东等）：地图只画本区域地市，按城市粒度逐城着色
-      if (this.query.regionName) {
-        return cities.map(c => toDatum(c.name, c)).filter(d => d && d.name)
-      }
-      // 整省下钻（如从排名进入）：拆分省份按业务区域着色，同一区域同色；其它省份逐城着色
-      const regionAvg = this.regionAvgMap(cities, option.fields)
-      return cities
-        .map(c => {
-          const region = cityRegionName(this.currentProvinceShort, c.name)
-          if (!region) return toDatum(c.name, c)
-          const avg = regionAvg[region]
-          if (avg === undefined) return null
-          return { name: c.name, value: avg }
-        })
-        .filter(d => d && d.name)
+      return this.cityPrices(option.fields)
     },
     // 全国层级生效的数据分组：后端同时返回「内蒙古/河北」和「蒙西/蒙东/冀北/河北南网」时，
     // 用区域分组替换整省分组，避免同一块区域出现两个数据源（区域优先）
@@ -678,34 +623,8 @@ export default {
     // 整省下钻时拆分省份同区域城市合并为一条区域数据（电价取均值、项目数求和）；
     // 已下钻到具体区域时按城市原样展示，与逐城着色保持一致
     provincePriceMap() {
+      if (this.query.level === 'province') return this.cityPriceMap()
       const map = {}
-      if (this.query.level === 'province') {
-        const cities = this.provinceCityEntries
-        if (this.query.regionName) {
-          cities.forEach(c => {
-            map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
-          })
-          return map
-        }
-        const buckets = {}
-        cities.forEach(c => {
-          const region = cityRegionName(this.currentProvinceShort, c.name)
-          if (!region) {
-            map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
-            return
-          }
-          if (!buckets[region]) buckets[region] = { items: [] }
-          buckets[region].items.push(c)
-        })
-        Object.keys(buckets).forEach(region => {
-          const items = buckets[region].items
-          const merged = Object.assign({ name: region }, this.mergeRegionValues(items))
-          // 浮层顶部展示区域名（蒙西/蒙东、冀北/河北南网）
-          merged._regionName = region
-          items.forEach(c => { map[c.name] = merged })
-        })
-        return map
-      }
       this.countryGroups.forEach(group => {
         // 省名 / 区域名统一归一（区域优先，含别名）
         const name = this.resolveGroupName(group)
@@ -784,6 +703,84 @@ export default {
     }
   },
   methods: {
+    // 单个项目 → 地图点位
+    toPoint(item) {
+      const cat = pointCategory(classifyProject(item.natProject, item.compCatalog))
+      return Object.assign({}, item, {
+        id: item.projectCode,
+        name: item.projectName,
+        // 经纬度兼容逗号小数（"110,807"→110.807）；无效坐标由地图组件丢弃该点
+        lng: toCoordNumber(item.longitude),
+        lat: toCoordNumber(item.latitude),
+        category: cat.id,
+        // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴/合规清单）
+        categoryName: cat.name,
+        subsidy: cat.name,
+        // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），
+        // 这里不做「在建」兜底——兜底会让所有点在只勾选「显示运营」时被前端二次过滤掉
+        status: item.status || ''
+      })
+    },
+    // 单个着色项：名称为假、或电价不可解析（字段缺失 / 负数）时返回 null —— 保持白色不入色阶。
+    // 真实结算电价可能是小数值（0.0001~0.3655），0 也是有效结算价，只要可解析且 >= 0 就入色阶
+    // （visualMap min/max 按数据自适应拉开对比）
+    priceDatum(name, obj, fields) {
+      if (!name) return null
+      const raw = pickPriceValue(obj, fields)
+      const num = raw === null ? NaN : Number(raw)
+      if (isNaN(num) || num < 0) return null
+      return { name, value: num }
+    },
+    // 省份下钻的逐城着色（地市条目兼容两种返回形态，见 provinceCityEntries）：
+    // 已下钻到具体区域（蒙西/蒙东等）→ 地图只画本区域地市，按城市粒度逐城着色；
+    // 整省下钻（如从排名进入）→ 拆分省份按业务区域着色（同一区域同色），其它省份逐城着色
+    cityPrices(fields) {
+      const cities = this.provinceCityEntries
+      if (this.query.regionName) {
+        return cities.map(c => this.priceDatum(c.name, c, fields)).filter(Boolean)
+      }
+      // 拆分省份：同区域的城市共用该区域的均价（由该区域下所有城市算出）
+      const regionAvg = this.regionAvgMap(cities, fields)
+      return cities
+        .map(c => {
+          const region = cityRegionName(this.currentProvinceShort, c.name)
+          if (!region) return this.priceDatum(c.name, c, fields)
+          const avg = regionAvg[region]
+          return avg === undefined ? null : { name: c.name, value: avg }
+        })
+        .filter(Boolean)
+    },
+    // 省份下钻的浮层数据：已下钻到具体区域 → 按城市原样展示（与逐城着色一致）；
+    // 整省下钻 → 拆分省份（内蒙古/河北）同区域的城市合并为一条区域数据（电价取均值、项目数求和）
+    cityPriceMap() {
+      const map = {}
+      const cities = this.provinceCityEntries
+      if (this.query.regionName) {
+        cities.forEach(c => {
+          map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
+        })
+        return map
+      }
+      // 按业务区域分组：不属于任何区域的城市原样展示，区域内城市合并成一条
+      const buckets = {}
+      cities.forEach(c => {
+        const region = cityRegionName(this.currentProvinceShort, c.name)
+        if (!region) {
+          map[c.name] = Object.assign({ projectCount: c.projectCount || 0 }, c)
+          return
+        }
+        if (!buckets[region]) buckets[region] = []
+        buckets[region].push(c)
+      })
+      Object.keys(buckets).forEach(region => {
+        const items = buckets[region]
+        const merged = Object.assign({ name: region }, this.mergeRegionValues(items))
+        // 浮层顶部展示区域名（蒙西/蒙东、冀北/河北南网）
+        merged._regionName = region
+        items.forEach(c => { map[c.name] = merged })
+      })
+      return map
+    },
     // 动态检测页面宽度：写入 pageWidth 驱动布局切换
     // 只在数值变化时赋值，避免 ResizeObserver 回调反复写同一值
     measurePageWidth() {
@@ -826,10 +823,7 @@ export default {
     },
     async fetchOverview(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
-      if (this.isStale(seq)) return
-      // 空态不写回：industry=[] 在后端语义里是「全部」（会返回全量数据），
-      // 全不选时报表必须保持无值，所以照常发请求但不采用其响应
-      if (this.categoryNone) return
+      if (!this.canWriteBack(seq)) return
       this.overview = data || {}
     },
     // 行业分布（顶部 tabs 计数 + 项目总览饼图）：同一接口但不传行业，
@@ -841,8 +835,8 @@ export default {
         // 若跟着传空数组会把 tabs 上的行业数量查没，筛选器就点不回去了
         industry: this.allIndustryNames
       }), {})
-      if (this.isStale(seq)) return
-      // 行业 tabs 计数独立保存：分类全部取消选中时页面数据为空，但筛选器需保留供重新选择
+      // 全不选时也要写回（见 canWriteBack）：tabs 上的行业数量必须留着，否则点不回去
+      if (!this.canWriteBack(seq, { keepWhenNone: true })) return
       if (data && Array.isArray(data.industryNum) && data.industryNum.length) {
         this.categoryStats = data.industryNum
       }
@@ -850,8 +844,7 @@ export default {
     // 建设/运营管理项目报表：POST queryBuildandOperate，入参 = 全局报表参数
     async fetchManageTrend(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryBuildandOperate(this.reportParams), [])
-      if (this.isStale(seq)) return
-      if (this.categoryNone) return
+      if (!this.canWriteBack(seq)) return
       this.manageList = Array.isArray(data) ? data : []
     },
     // 地区排名：全国/省内双接口，返回 [{ nameType, value }] 全称数据
@@ -860,8 +853,7 @@ export default {
       const isCountry = this.query.level === 'country'
       const api = isCountry ? queryNationalRanking : queryRegionRanking
       const data = await this.safeRequest(() => api(this.rankParams), [])
-      if (this.isStale(seq)) return
-      if (this.categoryNone) return
+      if (!this.canWriteBack(seq)) return
       const list = Array.isArray(data) ? data : []
       this.rankList = list.map(item => {
         const fullName = item.nameType || ''
@@ -895,8 +887,7 @@ export default {
         operateType: OPERATE_TYPE_MAP[this.operateEnergyType] || '1'
       })
       const data = await this.safeRequest(() => queryOperateDetail(params), {})
-      if (this.isStale(seq)) return
-      if (this.categoryNone) return
+      if (!this.canWriteBack(seq)) return
       this.operateDetail = data || {}
     },
 
@@ -923,8 +914,19 @@ export default {
     // 只是点位不标（由 visiblePoints 早退回空数组控制）
     async fetchMapDisplay(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
-      if (this.isStale(seq)) return
+      // 全不选时同样写回：省份热力 / 电价着色要正常显示，点位由 visiblePoints 早退到空数组
+      if (!this.canWriteBack(seq, { keepWhenNone: true })) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
+    },
+    // 报表响应写回前的统一校验：
+    //   1）序号过期（已有更晚的请求发出）→ 丢弃，避免慢响应覆盖新数据；
+    //   2）行业「全不选」→ 不写回，报表保持空态：industry=[] 在后端是「全部」语义，
+    //      会返回全量数据，照原样写回就等于没有空态。
+    //      例外（keepWhenNone）：行业分布要保住 tabs 行业数量、地图要保住省份热力与电价，
+    //      这两项始终写回，仅点位不标
+    canWriteBack(seq, { keepWhenNone = false } = {}) {
+      if (this.isStale(seq)) return false
+      return keepWhenNone || !this.categoryNone
     },
     // mapDisplay 返回归一化：数组 / 单对象 / 省名 key 映射 → 省份数组
     normalizeProvinceGroups(data) {
@@ -1016,10 +1018,7 @@ export default {
       }
       this.query.level = 'province'
       this.query.provinceCode = code
-      // 地图点位来自 provinceGroups：省份 GeoJSON 会先于接口数据落地，
-      // 下钻瞬间若不清空，全国的点会被画到省地图上（错位、跳一下再回来）。
-      // 先清空，等本批 queryMapDisplay 返回后一次性渲染，全过程无动画
-      this.provinceGroups = []
+      this.clearMapGroups()
       // 区域下钻：记录业务区域，驱动地图只画该区域地市、接口按区域取数
       this.query.regionName = region || ''
       this.query.cityCode = ''
@@ -1061,10 +1060,11 @@ export default {
       return normalizeRegionName(short) || short
     },
     // 城市列表 → 各拆分区域的均价（电价取平均；0 也是有效结算价，仅不可解析/负值不参与）
+    // 拆分省份各业务区域的电价均值：{ 区域名: 均值 }，用于整省下钻时同区域同色
     regionAvgMap(cities, fields) {
       const sum = {}
-      const count = {}
-        ; (cities || []).forEach(c => {
+      const count = {};
+      (cities || []).forEach(c => {
         const region = cityRegionName(this.currentProvinceShort, c.name)
         if (!region) return
         const raw = pickPriceValue(c, fields)
@@ -1079,19 +1079,26 @@ export default {
     },
     // 同区域城市合并：数值字段取平均、项目数求和，其余字段取首个非空值
     mergeRegionValues(items) {
-      const keys = []
-      items.forEach(item => Object.keys(item).forEach(k => { if (keys.indexOf(k) < 0) keys.push(k) }))
+      const keys = new Set()
+      items.forEach(item => Object.keys(item).forEach(k => keys.add(k)))
       const merged = {}
       keys.forEach(key => {
         const vals = items.map(i => i[key]).filter(v => v !== undefined && v !== null && v !== '')
         if (!vals.length) return
         const nums = vals.map(v => (typeof v === 'number' ? v : parseFloat(String(v).trim())))
+        // 全是可解析数字 → 取均值；否则取首项（字段名、区域名等）
         const allNum = nums.every(n => !isNaN(n))
         merged[key] = allNum ? nums.reduce((a, b) => a + b, 0) / nums.length : vals[0]
       })
       // 项目数按求和（不是平均）
       merged.projectCount = items.reduce((sum, i) => sum + (Number(i.projectCount) || 0), 0)
       return merged
+    },
+    // 下钻 / 返回时清空地图点位来源：省份 GeoJSON 会先于接口数据落地，
+    // 不清空会把上一层的点画到新地图上（错位、跳一下再回来）。
+    // 清空后等本批 queryMapDisplay 返回，一次性渲染，全过程无动画
+    clearMapGroups() {
+      this.provinceGroups = []
     },
     // 地图「返回」：回到全国视图
     handleMapBack() {
@@ -1104,7 +1111,7 @@ export default {
       this.query.cityCode = ''
       this.levels = [Object.assign({}, ROOT_LEVEL)]
       // 同下钻：先清空地图点位来源，避免省内点位被画到全国图上
-      this.provinceGroups = []
+      this.clearMapGroups()
       // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
       this.priceType = this.defaultPriceType
     },
@@ -1127,48 +1134,41 @@ export default {
       this.pointDetailLoading = false
     },
     // 卡片「更多>>」：跳转打开该项目对应的详情页面（原型交互13）
-    // 发电项目（POWER）跳运营侧项目清单，非标项目跳项目侧清单；
-    // projectCode / id 取对应详情对象（powerGenerationDetail / nonStandardDetail）
     handlePointMore({ detail }) {
-      this.$message.info(`跳转项目详情页：模拟`, {
-        ...detail
+      this.openProjectPage(detail, {
+        toast: '跳转项目详情页：模拟',
+        operationalPanel: 'base',
+        projectPanel: 'Base'
       })
-      const nonStandard = detail.nonStandardDetail || {}
-      const power = detail.powerGenerationDetail || {}
-      const data = detail.projectType === 'POWER' ? power : nonStandard
-      // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
-      const idPart = data.id ? `&id=${data.id}` : ''
-      if (Number(data.status) === 2) {
-        window.open(
-          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=base${idPart}`,
-          '_blank'
-        )
-      } else {
-        window.open(
-          `${window.location.origin}/project/project-list?mode=detail&projectCode=${data.projectCode}&pagePanel=Base${idPart}`,
-          '_blank'
-        )
-      }
     },
-    // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
+    // 卡片「详情>>」：跳转运营填报列表页（原型交互17）：只有运营期项目有该页面，
+    // 故不传 projectPanel —— 非运营期项目不跳转
     handlePointDetail({ detail }) {
-      this.$message.info(`跳转运营填报列表页：模拟`, {
-        ...detail
+      this.openProjectPage(detail, {
+        toast: '跳转运营填报列表页：模拟',
+        operationalPanel: 'operational-data'
       })
-      const nonStandard = detail.nonStandardDetail || {}
+    },
+    // 点位卡片跳转：发电项目（POWER）取 powerGenerationDetail，非标项目取 nonStandardDetail；
+    // 运营期项目（status = 2）打开运营侧页面，其余打开项目侧页面（projectPanel 为空则不跳）
+    openProjectPage(detail, { toast, operationalPanel, projectPanel }) {
+      this.$message.info(toast, { ...detail })
       const power = detail.powerGenerationDetail || {}
-      const data = detail.projectType === 'POWER' ? power : nonStandard
+      const data = detail.projectType === 'POWER' ? power : (detail.nonStandardDetail || {})
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
       const idPart = data.id ? `&id=${data.id}` : ''
       if (Number(data.status) === 2) {
         window.open(
-          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=operational-data${idPart}`,
+          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=${operationalPanel}${idPart}`,
           '_blank'
         )
+        return
       }
-    },
-    handleMore() {
-      this.$message.info('跳转项目清单页')
+      if (!projectPanel) return
+      window.open(
+        `${window.location.origin}/project/project-list?mode=detail&projectCode=${data.projectCode}&pagePanel=${projectPanel}${idPart}`,
+        '_blank'
+      )
     }
   }
 }

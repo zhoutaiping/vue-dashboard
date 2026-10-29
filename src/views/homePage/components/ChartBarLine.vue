@@ -5,7 +5,12 @@
 <script>
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
+import chartLifecycle from './mixins/chartLifecycle'
 import { getChartDpr } from '../uiScale'
+
+// 宽度变化超过该值（px）才重绘：图例/单位的排版档位按「渲染那一刻的宽度」计算，
+// 小幅抖动（滚动条、边框）不值得整图重算
+const RE_RENDER_WIDTH_STEP = 40
 
 /**
  * 通用柱线混合图（双 Y 轴，纯展示）
@@ -14,7 +19,7 @@ import { getChartDpr } from '../uiScale'
  */
 export default {
   name: 'ChartBarLine',
-  mixins: [resize],
+  mixins: [resize, chartLifecycle],
   props: {
     xData: { type: Array, default: () => [] },
     series: { type: Array, default: () => [] },
@@ -61,51 +66,18 @@ export default {
       }
     }
   },
-  mounted() {
-    this.initChart()
-    // 容器尺寸变化（flex 自适应高度、卡片显隐等）时图表跟随缩放，window resize 覆盖不到这些场景
-    if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
-      this.resizeObserver = new ResizeObserver(() => {
-        this.resize()
-      })
-      this.resizeObserver.observe(this.$refs.chart)
-    }
-  },
-  beforeDestroy() {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
-      this.resizeObserver = null
-    }
-    if (!this.chart) return
-    this.chart.dispose()
-    this.chart = null
-  },
   methods: {
     // 跟随容器缩放（覆盖 mixin 的同名方法）：宽高变化都要 resize；宽度跨档时补一次重绘，
     // 因为图例/单位的排版档位是按「渲染那一刻的宽度」算出来的，全屏切换、面板显隐后
     // 若只 resize 不重绘，窄栏的紧凑图例/隐藏单位会被带到宽布局里
     resize() {
-      if (!this.chart) return
-      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
-      if (this.chartDpr !== getChartDpr()) {
-        this.chart.dispose()
-        this.initChart()
-        return
-      }
+      if (!this.chart || this.rebuildIfDprChanged()) return
       this.chart.resize()
-      this.legendLayoutWidth = this.legendLayoutWidth || 0
-      if (this.legendLayoutWidth && Math.abs(this.chart.getWidth() - this.legendLayoutWidth) > 40) {
+      // 宽度跨档（>40px）才重绘：图例/单位的排版档位是按「渲染那一刻的宽度」算出来的，
+      // 全屏切换、面板显隐后若只 resize 不重绘，窄栏的紧凑图例/隐藏单位会被带到宽布局里
+      if (this.legendLayoutWidth && Math.abs(this.chart.getWidth() - this.legendLayoutWidth) > RE_RENDER_WIDTH_STEP) {
         this.renderChart()
       }
-    },
-    // 合并重绘：microtask 内去重，避免接口刷新时一次变更触发多轮 setOption
-    scheduleRender() {
-      if (this.renderScheduled) return
-      this.renderScheduled = true
-      Promise.resolve().then(() => {
-        this.renderScheduled = false
-        this.renderChart()
-      })
     },
     initChart() {
       // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下图表被拉伸发虚

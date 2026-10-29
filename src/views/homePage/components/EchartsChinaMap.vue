@@ -120,6 +120,7 @@ import { getChartDpr } from '../uiScale'
 import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
+import chartLifecycle from './mixins/chartLifecycle'
 import { REGION_PRICE_COMPARE, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import priceIcon from '../price.png'
 
@@ -138,6 +139,10 @@ const MAP_FILL_RATIO = 0.98
 const MAP_V_PADDING = 34
 // 浮动菜单距地图边缘的间距（px），与父级样式里的 --panel-gutter 保持一致
 const SIDE_GUTTER = 12
+// 地图初始缩放与缩放上下限：主图与灰色底座必须用同一组值，
+// 否则某一层先到极值被单向截断，两层会错开（底座漂移）
+const MAP_ZOOM = 0.8
+const MAP_SCALE_LIMIT = { min: 0.4, max: 2 }
 // 省份 GeoJSON 未到位时「加载中遮罩」的延迟出现阈值（ms）：
 // 加载通常几十毫秒完成，立刻铺遮罩会让下钻闪一层灰；超过该时长才显示，真正慢加载仍有反馈
 const MAP_LOADING_DELAY = 250
@@ -149,7 +154,7 @@ const MAP_LOADING_DELAY = 250
  */
 export default {
   name: 'EchartsChinaMap',
-  mixins: [resize],
+  mixins: [resize, chartLifecycle],
   props: {
     // 点位数据：[{ id, name, lng, lat, category, ... }]
     points: { type: Array, default: () => [] },
@@ -273,35 +278,9 @@ export default {
     // 发电项目：实控人/装机容量/发电利用小时数(达标率)/结算电价/补贴电价
     // 非标项目：实控人/接入方式/生产及预警/项目规模/是否平台转发
     // 接口未返回时回退点位原始数据；字段值缺失（随项目状态差异）渲染为 --
+    // 点位卡片行：非标项目与发电项目字段不同，各走一套
     pointCardRows() {
-      const raw = (this.activePoint && this.activePoint.raw) || {}
-      const detail = this.pointDetail || {}
-      const fmt = v => (v === undefined || v === null || v === '' ? '--' : v)
-      const enumText = (map, code) => (map[code] !== undefined ? map[code] : fmt(code))
-      if (this.pointCardIsNonStandard) {
-        const n = detail.nonStandardDetail || {}
-        const hasTransfer = n.platformTransfer !== undefined && n.platformTransfer !== null && n.platformTransfer !== ''
-        return [
-          { label: '实控人', value: fmt(n.actualController || raw.controller) },
-          { label: '接入方式', value: enumText(PROJECT_DETAIL_TEXT.accessMethod, n.accessMethod) },
-          { label: '生产及预警', value: enumText(PROJECT_DETAIL_TEXT.productionTypes, n.productionTypes) },
-          { label: '项目规模', value: fmt(n.productionCapacity) },
-          { label: '是否平台转发', value: hasTransfer ? enumText(PROJECT_DETAIL_TEXT.platformTransfer, n.platformTransfer) : PROJECT_DETAIL_TEXT.platformTransfer.none }
-        ]
-      }
-      const p = detail.powerGenerationDetail || {}
-      const capacity = p.capacity !== undefined ? p.capacity : (p.installCapacity !== undefined ? p.installCapacity : raw.capacity)
-      const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
-      const rate = p.rate !== undefined ? p.rate : raw.rate
-      const settle = p.editWindPrice || p.settlementPrice || raw.settlementPrice
-      const sube = p.subePrice || p.subsidyPrice || raw.subsidyPrice
-      return [
-        { label: '实控人', value: fmt(p.actualController || raw.controller) },
-        { label: '装机容量', value: `${fmt(capacity)}kW` },
-        { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: rate !== undefined && rate !== null && rate !== '' ? `（达标率：${rate}%）` : '' },
-        { label: '结算电价', value: `${fmt(settle)}元/kWh` },
-        { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
-      ]
+      return this.pointCardIsNonStandard ? this.nonStandardCardRows() : this.powerCardRows()
     }
   },
   watch: {
@@ -339,33 +318,63 @@ export default {
       this.syncLegendPosition()
     }
   },
-  mounted() {
-    this.initChart()
-    // 容器尺寸变化（父级改为百分比宽高、窄屏堆叠布局切换导致地图形变区域变化）时跟随缩放；
-    // resize mixin 只监听 window resize，覆盖不到这些场景，会导致地图拉伸变形或留白
-    if (this.$refs.chart && typeof ResizeObserver !== 'undefined') {
-      // 走 resize() 而非直接 chart.resize()：图例用 px 定位，需同步重排
-      this.resizeObserver = new ResizeObserver(() => this.resize())
-      this.resizeObserver.observe(this.$refs.chart)
-    }
-  },
+  // initChart / ResizeObserver 跟随见 mixins/chartLifecycle
   beforeDestroy() {
     if (this._maskTimer) {
       clearTimeout(this._maskTimer)
       this._maskTimer = null
     }
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
-      this.resizeObserver = null
-    }
     this.unbindWrapEvents()
     this.unbindFullscreen()
-    if (this.chart) {
-      this.chart.dispose()
-      this.chart = null
-    }
   },
   methods: {
+    // 卡片行文案：空值统一占位
+    cardText(v) {
+      return v === undefined || v === null || v === '' ? '--' : v
+    },
+    // 卡片行文案：枚举码 → 文案；未知码按占位规则原样展示
+    cardEnumText(map, code) {
+      return map[code] !== undefined ? map[code] : this.cardText(code)
+    },
+    nonStandardCardRows() {
+      const raw = (this.activePoint && this.activePoint.raw) || {}
+      const n = (this.pointDetail || {}).nonStandardDetail || {}
+      const hasTransfer = n.platformTransfer !== undefined && n.platformTransfer !== null && n.platformTransfer !== ''
+      return [
+        { label: '实控人', value: this.cardText(n.actualController || raw.controller) },
+        { label: '接入方式', value: this.cardEnumText(PROJECT_DETAIL_TEXT.accessMethod, n.accessMethod) },
+        { label: '生产及预警', value: this.cardEnumText(PROJECT_DETAIL_TEXT.productionTypes, n.productionTypes) },
+        { label: '项目规模', value: this.cardText(n.productionCapacity) },
+        {
+          label: '是否平台转发',
+          value: hasTransfer
+            ? this.cardEnumText(PROJECT_DETAIL_TEXT.platformTransfer, n.platformTransfer)
+            : PROJECT_DETAIL_TEXT.platformTransfer.none
+        }
+      ]
+    },
+    powerCardRows() {
+      const raw = (this.activePoint && this.activePoint.raw) || {}
+      const p = (this.pointDetail || {}).powerGenerationDetail || {}
+      // 详情接口优先，点位自身兜底；0 是有效值，只跳过 undefined
+      const capacity = p.capacity !== undefined ? p.capacity : (p.installCapacity !== undefined ? p.installCapacity : raw.capacity)
+      const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
+      const rate = p.rate !== undefined ? p.rate : raw.rate
+      // 电价类字段：价格口径多且可能为 0，按「真值优先」依次回退
+      const settle = p.editWindPrice || p.settlementPrice || raw.settlementPrice
+      const sube = p.subePrice || p.subsidyPrice || raw.subsidyPrice
+      return [
+        { label: '实控人', value: this.cardText(p.actualController || raw.controller) },
+        { label: '装机容量', value: `${this.cardText(capacity)}kW` },
+        {
+          label: '发电利用小时数',
+          value: `${this.cardText(hours)}h`,
+          sub: rate !== undefined && rate !== null && rate !== '' ? `（达标率：${rate}%）` : ''
+        },
+        { label: '结算电价', value: `${this.cardText(settle)}元/kWh` },
+        { label: '补贴电价', value: `${this.cardText(sube)}元/kWh` }
+      ]
+    },
     // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径：
     // 宽屏有左右浮层 → 让开「浮层外边距 12 + 浮层宽 + 浮层与地图间距 12」；
     // 窄屏无浮层 → 只留一个 12px 边距
@@ -376,13 +385,7 @@ export default {
     },
     // 覆盖 resize mixin：容器尺寸变化后除了重绘，还要重排用 px 定位的颜色图例
     resize() {
-      if (!this.chart) return
-      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
-      if (this.chartDpr !== getChartDpr()) {
-        this.chart.dispose()
-        this.initChart()
-        return
-      }
+      if (!this.chart || this.rebuildIfDprChanged()) return
       this.chart.resize()
       // 尺寸变化后重新自适应放大（比例变了，原来的 zoom 会留白或溢出）
       this.fitMapZoom()
@@ -407,12 +410,17 @@ export default {
       this.chartDpr = getChartDpr()
       this.chart = echarts.init(this.$refs.chart, null, { devicePixelRatio: this.chartDpr })
       this.renderOption()
+      this.bindChartEvents()
+      this.bindWrapEvents()
+      this.bindFullscreen()
+    },
+    // echarts 实例内事件：点击下钻、roam 转发给灰色底座、悬浮图标与清除兜底
+    bindChartEvents() {
       this.chart.on('click', this.handleClick)
       // 主图缩放/平移时同步灰色底座：微任务中执行，与主图在同一帧重绘，视觉上完全同步
-      this.chart.on('georoam', (params) => {
+      this.chart.on('georoam', params => {
         // 只处理主地图的缩放、拖动事件，避免底座事件重复转发
         if (!params || params.geoId !== 'mapMain') return
-
         const action = {
           type: 'geoRoam',
           componentType: 'geo',
@@ -420,14 +428,12 @@ export default {
           dx: params.dx || 0,
           dy: params.dy || 0
         }
-
         // 只有缩放事件才携带 zoom，避免把未定义的值传进去
         if (params.zoom != null) {
           action.zoom = params.zoom
           action.originX = params.originX
           action.originY = params.originY
         }
-
         this.chart.dispatchAction(action)
       })
       // 悬浮省份/市区时在鼠标处显示 province 图标（原型效果）；指向点位或移出地图时隐藏
@@ -453,11 +459,12 @@ export default {
       this.chart.on('globalout', () => {
         this.hoverIcon = ''
       })
-      this.bindFullscreen()
-      // 全局兜底（捕获阶段）：鼠标跟随图标只在指针位于本地图画布上时展示；
-      // 点位弹窗在指针离开整个地图容器时关闭（弹窗本身在容器内，可正常交互）
-      // zrender 的 mousemove/globalout 在「移到 DOM 覆盖层（菜单/面板/卡片）」「快速移出窗口」
-      // 「页面滚动」等场景下不再派发，图标/弹窗会残留，这里统一兜底清理
+    },
+    // DOM 全局兜底（捕获阶段）：鼠标跟随图标只在指针位于本地图画布上时展示；
+    // 点位弹窗在指针离开整个地图容器时关闭（弹窗本身在容器内，可正常交互）
+    // zrender 的 mousemove/globalout 在「移到 DOM 覆盖层（菜单/面板/卡片）」「快速移出窗口」
+    // 「页面滚动」等场景下不再派发，图标/弹窗会残留，这里统一兜底清理
+    bindWrapEvents() {
       this._onDocMove = e => {
         const t = e.target
         const wrap = this.$refs.wrap
@@ -499,7 +506,7 @@ export default {
       }
       document.addEventListener('click', this._onDocClick, true)
     },
-    // 解绑全局兜底事件（与 initChart 内绑定成对）
+    // 解绑全局兜底事件（与 bindWrapEvents 内绑定成对）
     unbindWrapEvents() {
       if (this._onDocMove) document.removeEventListener('mousemove', this._onDocMove, true)
       if (this.$refs.wrap && this._onMapLeave) this.$refs.wrap.removeEventListener('mouseleave', this._onMapLeave)
@@ -583,6 +590,19 @@ export default {
     // symbolSize 必须用数字：数组尺寸会让 zrender 走 scale 缩放渲染（style.width=2 + scale），
     // zrender 4 的 Image.contain 不做 transform 逆变换，该形态下鼠标命中/悬浮全部失效
     buildSeries() {
+      const groups = this.groupPoints()
+      const known = new Set(this.categories.map(c => c.id))
+      // 分类色用于未配置图标时的圆点兜底（带图标的点位颜色由 station 图片自带）
+      const series = this.categories.map(c => this.scatterSeries(c.name, c.color, groups[c.id] || []))
+      // 兜底：分类不在 categories 中的点位（保持朴素样式，不带悬浮放大/描边，与原实现一致）
+      const others = []
+      Object.keys(groups).forEach(k => { if (!known.has(k)) others.push(...groups[k]) })
+      if (others.length) series.push(this.scatterSeries('其他', this.defaultColor, others, false))
+      // 省会标记默认不渲染（会遮挡省份悬浮高亮与点击下钻），保留 capitals prop 供需要时开启
+      return series
+    },
+    // 按补贴分类把点位分组 → { 分类 id: [echarts 数据项] }；坐标缺失/不可解析的点直接丢弃
+    groupPoints() {
       const groups = {}
       this.points.forEach(p => {
         const lngRaw = p[this.fieldMap.lng]
@@ -593,49 +613,37 @@ export default {
         if (lngRaw == null || latRaw == null || lngRaw === '' || latRaw === '' ||
           isNaN(lng) || isNaN(lat)) return
         const cat = p[this.fieldMap.category]
-        const arr = groups[cat] || (groups[cat] = [])
-        const icon = this.subsidyIcons[p.subsidy]
-        arr.push(Object.assign(
-          { name: p[this.fieldMap.name] || '--', value: [lng, lat], raw: p },
-          icon ? { symbol: `image://${icon}`, symbolSize: 28 } : {}
-        ))
+        if (!groups[cat]) groups[cat] = []
+        groups[cat].push(this.scatterDatum(p, lng, lat))
       })
-
-      const known = new Set(this.categories.map(c => c.id))
-      // 分类色用于未配置图标时的圆点兜底（带图标的点位颜色由 station 图片自带）
-      const series = this.categories.map(c => ({
-        name: c.name,
+      return groups
+    },
+    // 单个点位 → echarts 数据项：带补贴属性图标时用 station 图片作 symbol
+    // symbolSize 必须用数字：数组尺寸会让 zrender 走 scale 缩放渲染（style.width=2 + scale），
+    // zrender 4 的 Image.contain 不做 transform 逆变换，该形态下鼠标命中/悬浮全部失效
+    scatterDatum(p, lng, lat) {
+      const icon = this.subsidyIcons[p.subsidy]
+      return Object.assign(
+        { name: p[this.fieldMap.name] || '--', value: [lng, lat], raw: p },
+        icon ? { symbol: `image://${icon}`, symbolSize: 28 } : {}
+      )
+    },
+    // 一组同色散点与主 geo 坐标系绑定（geo[0] 是灰色底座，这里指向 geo[1]）
+    scatterSeries(name, color, data, emphasis = true) {
+      const series = {
+        name,
         type: 'scatter',
         coordinateSystem: 'geo',
-        geoIndex: 1, // 指向主 geo（geo[0] 是灰色底座）
+        geoIndex: 1,
         symbolSize: 10,
-        itemStyle: { color: c.color },
-        emphasis: {
-          scale: true,
-          itemStyle: {
-            borderColor: '#fff',
-            borderWidth: 1
-          }
-        },
-        data: groups[c.id] || []
-      }))
-
-      // 兜底：分类不在 categories 中的点位
-      const others = []
-      Object.keys(groups).forEach(k => { if (!known.has(k)) others.push(...groups[k]) })
-      if (others.length) {
-        series.push({
-          name: '其他',
-          type: 'scatter',
-          coordinateSystem: 'geo',
-          geoIndex: 1,
-          symbolSize: 10,
-          itemStyle: { color: this.defaultColor },
-          data: others
-        })
+        itemStyle: { color },
+        data
       }
-
-      // 省会标记默认不渲染（会遮挡省份悬浮高亮与点击下钻），保留 capitals prop 供需要时开启
+      if (!emphasis) return series
+      series.emphasis = {
+        scale: true,
+        itemStyle: { borderColor: '#fff', borderWidth: 1 }
+      }
       return series
     },
     // 底图系列：区域绘制 + 电价着色（visualMap 作用其上），与 geo 共享坐标系，保证缩放平移时散点同步
@@ -652,255 +660,230 @@ export default {
           color: '#303133',
           fontSize: 12
         },
+        // 底色 / 悬浮与 geo[1] 同源，避免两处各写一份导致配色不一致
+        ...this.regionStyle(hasColor),
+        data: hasColor ? this.provinceData : []
+      }
+    },
+    // 区域底色与悬浮态：map 系列与 geo[1] 共用（区域绘制实际取 geo 样式，series 侧保持一致）
+    regionStyle(hasColor) {
+      // 有电价着色或已下钻到省 → 灰白底；仅「全国视图 + 未选电价」保持纯白无热力（交互7）
+      const filled = hasColor || this.mapCode
+      return {
         itemStyle: {
-          // 有电价数据时颜色由 visualMap 接管；下钻到省后无省级着色、全国未选电价时也用灰白底
-          // 仅「全国视图 + 未选电价」保持纯白无热力（交互7）
-          areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
+          areaColor: filled ? '#f0f2f5' : '#ffffff',
           // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
-          // 有底色时用白色细线；纯白底 (全国 + 未选电价) 白线会完全看不见，改用浅灰细线
-          borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
+          // 有底色时用白色细线；纯白底（全国 + 未选电价）白线会完全看不见，改用浅灰细线
+          borderColor: filled ? '#ffffff' : '#e6e9ef',
           borderWidth: 1.5
         },
         emphasis: {
           itemStyle: {
-            // 悬浮：省份填充透明绿、边框变绿并加粗
+            // 悬浮：区域填充透明绿、边框变绿并加粗
             areaColor: 'rgba(0, 200, 0, 0.18)',
             borderColor: '#00c800',
             borderWidth: 2.5
           },
-          // 悬浮时省份名保持显示（透明绿底上深色文字）
+          // 悬浮时名称保持显示（透明绿底上深色文字）
           label: { show: true, color: '#1a5c1a', fontWeight: 600 }
-        },
-        data: hasColor ? this.provinceData : []
+        }
       }
     },
     renderOption() {
       if (!this.chart) return
       // GeoJSON 异步加载未完成时（省地图尚未注册）先渲染全国，避免 setOption 使用未注册的 map 名报错
       const mapName = this.mapKey !== 'china' && this.mapCache[this.mapKey] ? this.mapKey : 'china'
-      const values = (this.provinceData || []).map(d => Number(d.value) || 0)
       // 未选电价维度 → 无着色数据：地图纯白、隐藏图例（交互7）
-      const hasColor = values.length > 0
-      const min = hasColor ? Math.min(...values) : 0
-      const max = hasColor ? Math.max(...values) : 0
+      const hasColor = (this.provinceData || []).length > 0
       // 图例左缘对齐「左侧浮层右缘 + 间距」：按容器宽度百分比动态计算，不再写死 px
       // （echarts 的 left 不支持 calc，故由 sideRatio × 容器宽 + 间距 得出）
       const legendLeft = this.calcSideInset()
       this._legendLeft = legendLeft
 
-      const option = {
+      this.chart.setOption({
         // 地图与点位全部即时渲染：下钻省份 / 返回全国 / 数据刷新都不再走
         // 「点位飞入 + 区域形变」的过渡动画，画面立刻可用（悬停高亮、缩放交互不受影响）
         animation: false,
-        tooltip: {
-          trigger: 'item',
-          confine: true,
-          // 浮层常驻鼠标正上方：水平居中于鼠标，底部留出 province 跟随图标的高度；
-          // 上方空间不足时落到鼠标下方，左右再按容器宽度收敛，避免溢出
-          position: (point, params, dom, rect, size) => {
-            const gap = 38
-            const contentWidth = size.contentSize[0]
-            const contentHeight = size.contentSize[1]
-            const viewWidth = size.viewSize[0]
-            let x = point[0] - contentWidth / 2
-            let y = point[1] - contentHeight - gap
-            if (y < 4) y = point[1] + gap
-            x = Math.max(4, Math.min(x, viewWidth - contentWidth - 4))
-            return [x, y]
-          },
-          // 深色胶囊样式由 formatter 内联实现（原型效果），外层容器置透明
-          backgroundColor: 'transparent',
-          borderWidth: 0,
-          padding: 0,
-          extraCssText: 'box-shadow: none;',
-          formatter: params => {
-            // 区域悬浮（交互8）：电价 + 与 spot 均价的差值
-            // 差值 > 0 → 绿色 + 向下箭头；< 0 → 红色 + 向上箭头
-            // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
-            // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
-            if (params.seriesType === 'map' || params.componentType === 'geo') {
-              const data = this.regionTooltipData[params.name]
-              const selected = this.priceOptions.find(o => o.id === this.priceType)
-              const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
-              const list = selected ? base.filter(item => item.field === selected.field) : base
-              // 选中项在当前层级不可展示（如标杆电价下钻到省）时回退为全部，避免出现空浮层
-              const rows = (list.length ? list : base)
-                .map(item => {
-                  // 取值兼容：avgXxx 为 null 时回退 xxx 字段，字符串数值（"0.4155"）可解析
-                  const v = data ? pickPriceValue(data, item.fields || item.field) : null
-                  const hasV = v !== null
-                  // 每行前置价格图标（原型：icon + 电价）
-                  const icon = `<img src="${priceIcon}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
-                  const priceHtml = `${icon}<b>${hasV ? v : '--'}</b>`
-                  // noDiff：标杆电价本身取自 spot，无独立 spot 均价可比，只展示数值不展示差值
-                  if (item.noDiff) return priceHtml
-                  const spot = data ? pickPriceValue(data, item.spotField) : null
-                  const hasSpot = spot !== null
-                  const vn = Number(v)
-                  const sn = Number(spot)
-                  // 差值所需字段为 null / 空（pickPriceValue 已把 "" 归一为 null）时无法计算，
-                  // 直接不渲染括号，避免出现「0（--）」这种空括号
-                  if (!hasV || !hasSpot || isNaN(vn) || isNaN(sn)) return priceHtml
-                  const diff = Math.round((vn - sn) * 100) / 100
-                  let diffHtml
-                  if (diff > 0) {
-                    diffHtml = `<span style="color:#2fc25b;">${diff.toFixed(2)}↓</span>`
-                  } else if (diff < 0) {
-                    diffHtml = `<span style="color:#f56c6c;">${diff.toFixed(2)}↑</span>`
-                  } else {
-                    diffHtml = '<span style="color:#909399;">0.00</span>'
-                  }
-                  return `${priceHtml}（${diffHtml}）`
-                })
-                .join('<br/>')
-              // 拆分省份（内蒙古/河北）下钻：浮层先展示业务区域名（蒙西/蒙东、冀北/河北南网）
-              const regionHead = data && data._regionName
-                ? `<div style="font-size:12px;opacity:.85;margin-bottom:2px;">${data._regionName}</div>`
-                : ''
-              return this.wrapTooltip(`${regionHead}${rows}`)
-            }
-            return ''
-          }
-        },
+        tooltip: this.buildTooltip(),
         // geo 承担区域绘制：map series 与 geo 共享坐标系（geoIndex）时不绘制图形（MapView.render 直接 return），
         // 仅承载数据供 visualMap 着色（着色通过 series 数据写入 geo regions）；因此底图/悬浮/标签样式都配在 geo 上
-        // geo[0] = 灰色底座（伪 3D 立体轮廓，数组靠前先绘制、垫在底层）；geo[1] = 主地图，系列与交互均指向 geo[1]
-        geo: [
-          {
-            // 灰色底座轮廓：与主图同形同尺寸，屏幕位置整体右移/下移，形成倾斜立体底座
-            id: 'mapShadow',
-            map: mapName,
-            layoutCenter: ['50%', '49%'],
-            layoutSize: '103%',
-            // 初始缩放与主图一致；此后由 georoam 事件转发同一相对变换保持对齐
-            zoom: 0.8,
-            // 与主图相同的缩放上下限，避免到达极值被单向截断导致两层错开
-            scaleLimit: { min: 0.4, max: 2 },
-            // roam 关闭：底座的 roam 控制器始终会因「指针压在主图区域上」
-            // 被 onIrrelevantElement 判定为不相关而永不触发，跟随必须由主图事件转发完成
-            roam: false,
-            silent: true,
-            label: { show: false },
-            itemStyle: {
-              areaColor: '#ccd4dc',
-              borderColor: '#b9c3cd',
-              borderWidth: 0.5
-            }
-          },
-          {
-            // roam 事件与转发均以 id 标识主图
-            id: 'mapMain',
-            // 全国地图 / 下钻后的省市区县地图（mapCode 为空时回全国）
-            map: mapName,
-            // 与底座同布局尺寸（仅 layoutCenter 偏移），保证缩放平移后两图严格对齐
-            layoutCenter: ['50%', '48%'],
-            layoutSize: '104%',
-            roam: true,
-            zoom: 0.8,
-            scaleLimit: { min: 0.4, max: 2 },
-            // 显示省名 / 区县名
-            label: { show: true, color: '#303133', fontSize: 12 },
-            itemStyle: {
-              // 有电价着色或已下钻到省 → 灰白底；全国未选电价 → 纯白无热力（交互7）
-              // 区域绘制实际取 geo 样式，此处与 buildMapSeries 保持一致
-              areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
-              // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
-              // 有底色时用白色细线；纯白底（全国 + 未选电价）白线会看不见，改用浅灰细线
-              borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
-              borderWidth: 1.5
-            },
-            emphasis: {
-              itemStyle: {
-                // 悬浮：区域填充透明绿、边框变绿并加粗
-                areaColor: 'rgba(0, 200, 0, 0.18)',
-                borderColor: '#00c800',
-                borderWidth: 2.5
-              },
-              // 悬浮时名称保持显示（透明绿底上深色文字）
-              label: { show: true, color: '#1a5c1a', fontWeight: 600 }
-            }
-          }
-        ],
-        // 左下角颜色图例：改用 echarts visualMap（连续型），与地图着色同源
-        // 无数据占位：选中了电价维度但接口无数据（如下钻省份全部为 0）时，
-        // 图例仍显示（高/低），色阶置灰，避免左下角空缺；未选电价维度才完全隐藏（交互7）
-        visualMap: hasColor
-          ? {
-            type: 'continuous',
-            // 作用于底图系列（series 中第 0 项）
-            seriesIndex: 0,
-            min,
-            // 最小=最大时给微量跨度，避免 echarts 区间退化
-            max: max === min ? min + 0.01 : max,
-            orient: 'vertical',
-            left: legendLeft,
-            bottom: 12,
-            itemWidth: 16,
-            itemHeight: 160,
-            // 纯图例，不显示可拖动手柄
-            calculable: false,
-            // 条上端「高」、下端「低」
-            text: ['高', '低'],
-            textStyle: { color: '#303133', fontSize: 12 },
-            // 色阶：浅蓝 → 深蓝（与地图着色一致）
-            inRange: { color: ['#d6e8ff', '#7db9ff', '#0088ff'] }
-          }
-          : (this.priceType
-            ? {
-              type: 'continuous',
-              seriesIndex: 0,
-              // 默认占位区间 0~1，仅作视觉占位，不参与着色（此时系列 data 为空）
-              min: 0,
-              max: 1,
-              orient: 'vertical',
-              left: legendLeft,
-              bottom: 12,
-              itemWidth: 16,
-              itemHeight: 160,
-              calculable: false,
-              text: ['高', '低'],
-              textStyle: { color: '#c0c4cc', fontSize: 12 },
-              inRange: { color: ['#f0f2f5', '#f0f2f5'] }
-            }
-            : { show: false }),
+        geo: this.buildGeo(mapName, hasColor),
+        // 左下角颜色图例（连续型 visualMap），与地图着色同源
+        visualMap: this.buildVisualMap(hasColor, legendLeft),
         // 分类筛选已由顶部 CategoryTabs 承担，且底部中间需留给全屏按钮，故关闭内置图例
         legend: { show: false },
         series: [this.buildMapSeries(mapName, hasColor)].concat(this.buildSeries())
-      }
-      this.chart.setOption(option, true)
+      }, true)
       // 每次重绘后按容器比例重新自适应放大（切换省份、全屏、数据刷新都走这里）
       this.fitMapZoom()
+    },
+    // 悬浮浮层：深色胶囊由 formatter 内联实现（原型效果），外层容器置透明
+    buildTooltip() {
+      return {
+        trigger: 'item',
+        confine: true,
+        // 浮层常驻鼠标正上方：水平居中于鼠标，底部留出 province 跟随图标的高度；
+        // 上方空间不足时落到鼠标下方，左右再按容器宽度收敛，避免溢出
+        position: (point, params, dom, rect, size) => {
+          const gap = 38
+          const contentWidth = size.contentSize[0]
+          const contentHeight = size.contentSize[1]
+          const viewWidth = size.viewSize[0]
+          const x = point[0] - contentWidth / 2
+          const y = point[1] - contentHeight - gap
+          const top = y < 4 ? point[1] + gap : y
+          return [Math.max(4, Math.min(x, viewWidth - contentWidth - 4)), top]
+        },
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        padding: 0,
+        extraCssText: 'box-shadow: none;',
+        formatter: params => {
+          // 只有区域悬浮才有内容（点位浮层由 point-card 承担）
+          if (params.seriesType === 'map' || params.componentType === 'geo') {
+            return this.regionTooltipHtml(params)
+          }
+          return ''
+        }
+      }
+    },
+    // 区域悬浮（交互8）：电价 + 与 spot 均价的差值
+    // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
+    // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
+    regionTooltipHtml(params) {
+      const data = this.regionTooltipData[params.name]
+      const selected = this.priceOptions.find(o => o.id === this.priceType)
+      const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
+      const list = selected ? base.filter(item => item.field === selected.field) : base
+      // 选中项在当前层级不可展示（如标杆电价下钻到省）时回退为全部，避免出现空浮层
+      const rows = (list.length ? list : base).map(item => this.priceRowHtml(data, item)).join('<br/>')
+      // 拆分省份（内蒙古/河北）下钻：浮层先展示业务区域名（蒙西/蒙东、冀北/河北南网）
+      const regionHead = data && data._regionName
+        ? `<div style="font-size:12px;opacity:.85;margin-bottom:2px;">${data._regionName}</div>`
+        : ''
+      return this.wrapTooltip(`${regionHead}${rows}`)
+    },
+    // 单行电价：价格图标 + 数值，可比较时附带与 spot 均价的差值（>0 绿↓ / <0 红↑）
+    priceRowHtml(data, item) {
+      // 取值兼容：avgXxx 为 null 时回退 xxx 字段，字符串数值（"0.4155"）可解析
+      const v = data ? pickPriceValue(data, item.fields || item.field) : null
+      // 每行前置价格图标（原型：icon + 电价）
+      const icon = `<img src="${priceIcon}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
+      const priceHtml = `${icon}<b>${v !== null ? v : '--'}</b>`
+      // noDiff：标杆电价本身取自 spot，无独立 spot 均价可比，只展示数值不展示差值
+      if (item.noDiff) return priceHtml
+      const spot = data ? pickPriceValue(data, item.spotField) : null
+      const vn = Number(v)
+      const sn = Number(spot)
+      // 差值所需字段为 null / 空（pickPriceValue 已把 "" 归一为 null）时无法计算，
+      // 直接不渲染括号，避免出现「0（--）」这种空括号
+      if (v === null || spot === null || isNaN(vn) || isNaN(sn)) return priceHtml
+      const diff = Math.round((vn - sn) * 100) / 100
+      let diffHtml
+      if (diff > 0) {
+        diffHtml = `<span style="color:#2fc25b;">${diff.toFixed(2)}↓</span>`
+      } else if (diff < 0) {
+        diffHtml = `<span style="color:#f56c6c;">${diff.toFixed(2)}↑</span>`
+      } else {
+        diffHtml = '<span style="color:#909399;">0.00</span>'
+      }
+      return `${priceHtml}（${diffHtml}）`
+    },
+    // geo[0] = 灰色底座（伪 3D 立体轮廓，数组靠前先绘制、垫在底层）；geo[1] = 主地图，系列与交互均指向 geo[1]
+    buildGeo(mapName, hasColor) {
+      return [
+        {
+          // 灰色底座轮廓：与主图同形同尺寸，屏幕位置整体右移/下移，形成倾斜立体底座
+          id: 'mapShadow',
+          map: mapName,
+          layoutCenter: ['50%', '49%'],
+          layoutSize: '103%',
+          // 初始缩放与主图一致；此后由 georoam 事件转发同一相对变换保持对齐
+          zoom: MAP_ZOOM,
+          // 与主图相同的缩放上下限，避免到达极值被单向截断导致两层错开
+          scaleLimit: MAP_SCALE_LIMIT,
+          // roam 关闭：底座的 roam 控制器始终会因「指针压在主图区域上」
+          // 被 onIrrelevantElement 判定为不相关而永不触发，跟随必须由主图事件转发完成
+          roam: false,
+          silent: true,
+          label: { show: false },
+          itemStyle: {
+            areaColor: '#ccd4dc',
+            borderColor: '#b9c3cd',
+            borderWidth: 0.5
+          }
+        },
+        Object.assign({
+          // roam 事件与转发均以 id 标识主图
+          id: 'mapMain',
+          // 全国地图 / 下钻后的省市区县地图（mapCode 为空时回全国）
+          map: mapName,
+          // 与底座同布局尺寸（仅 layoutCenter 偏移），保证缩放平移后两图严格对齐
+          layoutCenter: ['50%', '48%'],
+          layoutSize: '104%',
+          roam: true,
+          zoom: MAP_ZOOM,
+          scaleLimit: MAP_SCALE_LIMIT,
+          // 显示省名 / 区县名
+          label: { show: true, color: '#303133', fontSize: 12 }
+        }, this.regionStyle(hasColor))
+      ]
+    },
+    // 左下角颜色图例：连续型 visualMap，与地图着色同源
+    // 无数据占位：选中了电价维度但接口无数据（如下钻省份全部为 0）时，
+    // 图例仍显示（高/低），色阶置灰，避免左下角空缺；未选电价维度才完全隐藏（交互7）
+    buildVisualMap(hasColor, legendLeft) {
+      const base = {
+        type: 'continuous',
+        // 作用于底图系列（series 中第 0 项）
+        seriesIndex: 0,
+        orient: 'vertical',
+        left: legendLeft,
+        bottom: 12,
+        itemWidth: 16,
+        itemHeight: 160,
+        // 纯图例，不显示可拖动手柄
+        calculable: false,
+        // 条上端「高」、下端「低」
+        text: ['高', '低']
+      }
+      if (!hasColor) {
+        // 未选电价维度 → 完全隐藏；已选但无数据 → 置灰占位
+        return this.priceType
+          ? Object.assign({}, base, {
+            // 默认占位区间 0~1，仅作视觉占位，不参与着色（此时系列 data 为空）
+            min: 0,
+            max: 1,
+            textStyle: { color: '#c0c4cc', fontSize: 12 },
+            inRange: { color: ['#f0f2f5', '#f0f2f5'] }
+          })
+          : { show: false }
+      }
+      const values = (this.provinceData || []).map(d => Number(d.value) || 0)
+      const min = Math.min(...values)
+      const max = Math.max(...values)
+      return Object.assign({}, base, {
+        min,
+        // 最小=最大时给微量跨度，避免 echarts 区间退化
+        max: max === min ? min + 0.01 : max,
+        textStyle: { color: '#303133', fontSize: 12 },
+        // 色阶：浅蓝 → 深蓝（与地图着色一致）
+        inRange: { color: ['#d6e8ff', '#7db9ff', '#0088ff'] }
+      })
     },
     // 地图默认自适应放大：按地图实际绘制包围盒把主图缩放到容器填充率（原型默认铺满）。
     // 不做这一步时 zoom 固定 0.8，宽屏/窄屏/全屏下地图都缩在中部、四周留大片空白
     fitMapZoom() {
       if (!this.chart || this._fitting) return
-      // 按 id 找主图模型：getComponent 的第二个参数只认下标，这里遍历更稳
-      let geoModel = null
-      this.chart.getModel().eachComponent('geo', model => {
-        if (model.id === 'mapMain') geoModel = model
-      })
+      const geoModel = this.mainGeoModel()
       const coord = geoModel && geoModel.coordinateSystem
-      const regions = (coord && coord.regions) || []
-      if (!regions.length) return
-      // 地图经纬包围盒：逐区域手算 min/max（区域 rect 不保证是 BoundingRect 实例，union 会算错）
-      let minX = Infinity
-      let minY = Infinity
-      let maxX = -Infinity
-      let maxY = -Infinity
-      regions.forEach(region => {
-        const rect = typeof region.getBoundingRect === 'function' ? region.getBoundingRect() : null
-        if (!rect || !rect.width || !rect.height) return
-        minX = Math.min(minX, rect.x)
-        minY = Math.min(minY, rect.y)
-        maxX = Math.max(maxX, rect.x + rect.width)
-        maxY = Math.max(maxY, rect.y + rect.height)
-      })
-      if (!isFinite(minX) || !isFinite(maxX)) return
+      // 地图经纬包围盒：null 表示尚未注册成功或区域无有效矩形
+      const box = this.mapBoundingBox((coord && coord.regions) || [])
+      if (!box) return
       // 经纬盒 → 像素：convertToPixel 走的是含 layoutCenter / layoutSize / zoom 的完整变换，
       // 换成 coord.dataToPoint 拿到的只是投影尺寸，不含布局缩放，会算出离谱的放大倍数
-      const p0 = this.chart.convertToPixel({ geoIndex: 1 }, [minX, minY])
-      const p1 = this.chart.convertToPixel({ geoIndex: 1 }, [maxX, maxY])
+      const p0 = this.chart.convertToPixel({ geoIndex: 1 }, [box.minX, box.minY])
+      const p1 = this.chart.convertToPixel({ geoIndex: 1 }, [box.maxX, box.maxY])
       if (!p0 || !p1) return
       const usedW = Math.abs(p1[0] - p0[0])
       const usedH = Math.abs(p1[1] - p0[1])
@@ -934,6 +917,32 @@ export default {
         geo: [{ id: 'mapShadow', zoom: next }, { id: 'mapMain', zoom: next }]
       })
       this._fitting = false
+    },
+    // 按 id 找主图模型：getComponent 的第二个参数只认下标，这里遍历更稳
+    mainGeoModel() {
+      let geoModel = null
+      this.chart.getModel().eachComponent('geo', model => {
+        if (model.id === 'mapMain') geoModel = model
+      })
+      return geoModel
+    },
+    // 地图经纬包围盒：逐区域手算 min/max（区域 rect 不保证是 BoundingRect 实例，union 会算错）；
+    // 没有有效区域时返回 null
+    mapBoundingBox(regions) {
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+      regions.forEach(region => {
+        const rect = typeof region.getBoundingRect === 'function' ? region.getBoundingRect() : null
+        if (!rect || !rect.width || !rect.height) return
+        minX = Math.min(minX, rect.x)
+        minY = Math.min(minY, rect.y)
+        maxX = Math.max(maxX, rect.x + rect.width)
+        maxY = Math.max(maxY, rect.y + rect.height)
+      })
+      if (!isFinite(minX) || !isFinite(maxX)) return null
+      return { minX, minY, maxX, maxY }
     },
     // tooltip 深色胶囊外壳（原型效果）：所有系列统一包裹
     // 电价气泡外壳：深色胶囊。圆角 14px ≈ 单行气泡高度的一半，左右两端呈半圆（原型效果）；

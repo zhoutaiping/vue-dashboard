@@ -125,7 +125,6 @@ export default {
     white-space: nowrap;
 
     &:hover {
-      // background-color: rgba(0,136,255,1);
       color: rgba(255,255,255,1);
     }
 
@@ -133,17 +132,8 @@ export default {
       color: #fff;
       background-color: rgba(0,136,255,1);
     }
-
-    /* 置灰态：全部未全选时的"全部"，或已全选时的各行业 */
-    &.is-muted {
-      background-color: rgba(96,105,127,0.7);
-      color: rgba(255,255,255,1);
-
-      &:hover {
-        // background-color: rgba(0,136,255,1);
-        color: rgba(255,255,255,1);
-      }
-    }
+    /* is-muted 由模板下发（「全部」未全选时的置灰态），当前与基础态同色，
+       保留该类以便后续需要区分底色时直接补样式 */
   }
 
   &__count {

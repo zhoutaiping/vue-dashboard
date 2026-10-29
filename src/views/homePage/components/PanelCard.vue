@@ -4,7 +4,6 @@
       <div class="panel-card__left">
         <slot name="header">
           <span class="panel-card__title">
-            <!-- <i v-if="icon" :class="['panel-card__icon', icon]" /> -->
             <el-image :src="titleIcon" style="width: 14px; height: 14px" />
             {{ title }}
           </span>
@@ -33,7 +32,6 @@ export default {
   props: {
     title: { type: String, default: '' },
     subTitle: { type: String, default: '' },
-    icon: { type: String, default: '' },
     bodyStyle: { type: Object, default: () => ({}) }
   },
   data() {
@@ -64,8 +62,7 @@ export default {
     padding: 10px 12px;
     height: 40px;
     border-radius: 12px 12px 0px 0px;
-    background-color: rgba(250,250,250,1)
-    // border-bottom: 1px solid #f0f2f5;
+    background-color: rgba(250,250,250,1);
   }
 
   &__left {
@@ -82,22 +79,6 @@ export default {
     color: #303133;
     white-space: nowrap;
     gap: 12px;
-
-    /* 标题前蓝色竖条 */
-    // &::before {
-    //   content: '';
-    //   width: 4px;
-    //   height: 14px;
-    //   border-radius: 2px;
-    //   background: #08f;
-    //   margin-right: 6px;
-    //   flex-shrink: 0;
-    // }
-  }
-
-  &__icon {
-    margin-right: 6px;
-    color: #0088ff;
   }
 
   /* 区域后缀，与标题连成 "项目总览(全国)" 样式 */

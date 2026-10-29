@@ -5,6 +5,7 @@
 <script>
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
+import chartLifecycle from './mixins/chartLifecycle'
 import { getChartDpr } from '../uiScale'
 
 // 右侧竖向图例占用的宽度（px）：图标 12 + 间距 5 + label 62 + 「1136个(38%)」约 79 ≈ 158
@@ -27,7 +28,7 @@ const DONUT_CENTER_RATIO = 0.25
  */
 export default {
   name: 'ChartPie',
-  mixins: [resize],
+  mixins: [resize, chartLifecycle],
   props: {
     data: { type: Array, default: () => [] },
     fieldMap: {
@@ -83,24 +84,6 @@ export default {
       }
     }
   },
-  mounted() {
-    this.initChart()
-    // 容器尺寸变化（flex 自适应、面板显隐）时图表跟随缩放，window resize 覆盖不到这些场景
-    // 走 resize() 而非直接 chart.resize()：圆心比例也要随宽度重算
-    if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
-      this.resizeObserver = new ResizeObserver(() => this.resize())
-      this.resizeObserver.observe(this.$refs.chart)
-    }
-  },
-  beforeDestroy() {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
-      this.resizeObserver = null
-    }
-    if (!this.chart) return
-    this.chart.dispose()
-    this.chart = null
-  },
   methods: {
     // 环形图几何：圆心比例 + 外半径（px）
     // 绘图区 = 容器宽 - 图例宽 - 图例左留白（LEGEND_GAP），环图在绘图区内居中、撑满可用高度。
@@ -149,28 +132,13 @@ export default {
     // 容器尺寸变化：缩放画布；圆心/半径随新尺寸重算，变化时才 setOption
     // （连续拖拽窗口时比例不变就跳过，避免无谓重绘）
     resize() {
-      if (!this.chart) return
-      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
-      if (this.chartDpr !== getChartDpr()) {
-        this.chart.dispose()
-        this.initChart()
-        return
-      }
+      if (!this.chart || this.rebuildIfDprChanged()) return
       this.chart.resize()
       const geo = this.pieGeometry()
       const key = `${geo.centerRatio.toFixed(3)}|${geo.outer}`
       if (key === this._geomKey) return
       this._geomKey = key
       this.chart.setOption({ series: [this.geometryPatch(geo)] })
-    },
-    // 合并重绘：microtask 内去重，避免接口刷新时一次变更触发多轮 setOption
-    scheduleRender() {
-      if (this.renderScheduled) return
-      this.renderScheduled = true
-      Promise.resolve().then(() => {
-        this.renderScheduled = false
-        this.renderChart()
-      })
     },
     initChart() {
       // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下图表被拉伸发虚

@@ -2,10 +2,11 @@
   <div class="home-page-container">
     <!-- 顶部统计卡片区域 -->
     <el-row :gutter="16" class="stats-cards">
-      <el-col :xs="24" :sm="12" :lg="6">
+      <!-- 四张卡结构完全一致（环形图同为占位数据），差异只在标题与下方明细，故按数据渲染 -->
+      <el-col v-for="card in statCards" :key="card.title" :xs="24" :sm="12" :lg="6">
         <el-card class="stat-card" shadow="never">
           <div class="stat-header">
-            <span class="stat-title">未确认投资项目</span>
+            <span class="stat-title">{{ card.title }}</span>
             <i class="el-icon-question header-icon" />
           </div>
           <div class="stat-body">
@@ -13,6 +14,7 @@
               <div class="chart-circle">
                 <svg width="120" height="120" class="circle-svg">
                   <circle cx="60" cy="60" r="50" stroke="#e5e5e5" stroke-width="10" fill="none" />
+                  <!-- dasharray = 周长 2πr（r=50）；dashoffset 78 ≈ 缺 25%，即画 75% 的弧 -->
                   <circle
                     cx="60"
                     cy="60"
@@ -33,157 +35,12 @@
               </div>
             </div>
             <div class="stat-info">
-              <div class="info-item">
-                <span class="info-label">已通知项目数：</span>
-                <span class="info-value success">210 ↑</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">未通知项目：</span>
-                <span class="info-value danger">9 ↑</span>
+              <div v-for="item in card.items" :key="item.label" class="info-item">
+                <span class="info-label">{{ item.label }}</span>
+                <span class="info-value" :class="item.type">{{ item.text }}</span>
               </div>
               <div class="info-item date">
-                <span class="info-label">数据更新日期：2025-11-10</span>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="stat-card" shadow="never">
-          <div class="stat-header">
-            <span class="stat-title">未确认贷款项目</span>
-            <i class="el-icon-question header-icon" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-chart">
-              <div class="chart-circle">
-                <svg width="120" height="120" class="circle-svg">
-                  <circle cx="60" cy="60" r="50" stroke="#e5e5e5" stroke-width="10" fill="none" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    stroke="#67c23a"
-                    stroke-width="10"
-                    fill="none"
-                    stroke-dasharray="314"
-                    stroke-dashoffset="78"
-                    stroke-linecap="round"
-                    transform="rotate(-90 60 60)"
-                  />
-                </svg>
-                <div class="chart-content">
-                  <div class="number">210</div>
-                  <div class="arrow">↑</div>
-                </div>
-              </div>
-            </div>
-            <div class="stat-info">
-              <div class="info-item">
-                <span class="info-label">已通知项目数：</span>
-                <span class="info-value success">210 ↑</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">未通知项目数：</span>
-                <span class="info-value danger">9 ↑</span>
-              </div>
-              <div class="info-item date">
-                <span class="info-label">数据更新日期：近三个月</span>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="stat-card" shadow="never">
-          <div class="stat-header">
-            <span class="stat-title">未确认担保项目</span>
-            <i class="el-icon-question header-icon" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-chart">
-              <div class="chart-circle">
-                <svg width="120" height="120" class="circle-svg">
-                  <circle cx="60" cy="60" r="50" stroke="#e5e5e5" stroke-width="10" fill="none" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    stroke="#67c23a"
-                    stroke-width="10"
-                    fill="none"
-                    stroke-dasharray="314"
-                    stroke-dashoffset="78"
-                    stroke-linecap="round"
-                    transform="rotate(-90 60 60)"
-                  />
-                </svg>
-                <div class="chart-content">
-                  <div class="number">210</div>
-                  <div class="arrow">↑</div>
-                </div>
-              </div>
-            </div>
-            <div class="stat-info">
-              <div class="info-item">
-                <span class="info-label">已通知数量：</span>
-                <span class="info-value success">210 ↑</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">未通知数量：</span>
-                <span class="info-value danger">9 ↑</span>
-              </div>
-              <div class="info-item date">
-                <span class="info-label">数据更新日期：2025-11-10</span>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="stat-card" shadow="never">
-          <div class="stat-header">
-            <span class="stat-title">无投入值录入客户</span>
-            <i class="el-icon-question header-icon" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-chart">
-              <div class="chart-circle">
-                <svg width="120" height="120" class="circle-svg">
-                  <circle cx="60" cy="60" r="50" stroke="#e5e5e5" stroke-width="10" fill="none" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    stroke="#67c23a"
-                    stroke-width="10"
-                    fill="none"
-                    stroke-dasharray="314"
-                    stroke-dashoffset="78"
-                    stroke-linecap="round"
-                    transform="rotate(-90 60 60)"
-                  />
-                </svg>
-                <div class="chart-content">
-                  <div class="number">210</div>
-                  <div class="arrow">↑</div>
-                </div>
-              </div>
-            </div>
-            <div class="stat-info">
-              <div class="info-item">
-                <span class="info-label">无组长客户数：</span>
-                <span class="info-value danger">9 ↑</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">无投入值人数：</span>
-                <span class="info-value danger">9 ↑</span>
-              </div>
-              <div class="info-item date">
-                <span class="info-label">数据更新日期：近三个月</span>
+                <span class="info-label">{{ card.date }}</span>
               </div>
             </div>
           </div>
@@ -259,6 +116,41 @@ export default {
   data() {
     return {
       jumpPage: 1,
+      // 顶部统计卡（占位数据：等接口就绪后由后端返回，结构不变）
+      statCards: [
+        {
+          title: '未确认投资项目',
+          items: [
+            { label: '已通知项目数：', text: '210 ↑', type: 'success' },
+            { label: '未通知项目：', text: '9 ↑', type: 'danger' }
+          ],
+          date: '数据更新日期：2025-11-10'
+        },
+        {
+          title: '未确认贷款项目',
+          items: [
+            { label: '已通知项目数：', text: '210 ↑', type: 'success' },
+            { label: '未通知项目数：', text: '9 ↑', type: 'danger' }
+          ],
+          date: '数据更新日期：近三个月'
+        },
+        {
+          title: '未确认担保项目',
+          items: [
+            { label: '已通知数量：', text: '210 ↑', type: 'success' },
+            { label: '未通知数量：', text: '9 ↑', type: 'danger' }
+          ],
+          date: '数据更新日期：2025-11-10'
+        },
+        {
+          title: '无投入值录入客户',
+          items: [
+            { label: '无组长客户数：', text: '9 ↑', type: 'danger' },
+            { label: '无投入值人数：', text: '9 ↑', type: 'danger' }
+          ],
+          date: '数据更新日期：近三个月'
+        }
+      ],
       projectList: [
         {
           projectCode: 'PPB202504015',
