@@ -167,18 +167,29 @@ export const ENERGY_TYPE_KEYS = ['wind', 'pv', 'nonstandard']
 // 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏; 3.非标）
 export const OPERATE_TYPE_MAP = { wind: '1', pv: '2', nonstandard: '3' }
 
+// 金额展示：整数部分加千分位，小数部分原样保留（不四舍五入、不补位、不加千分位）。
+// 只处理纯数字（含负号与小数）的数值或数字字符串；空值、带单位、科学计数法等原样返回，
+// 由调用方（MetricList 等）决定占位显示
+export function formatAmount(value) {
+  if (value === null || value === undefined || value === '') return value
+  const matched = /^(-?)(\d+)(\.\d+)?$/.exec(String(value).trim())
+  if (!matched) return value
+  return `${matched[1]}${matched[2].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${matched[3] || ''}`
+}
+
 // 运营项目情况指标：energyType → 指标项
 // field 支持「候选字段数组」：后端同一语义在不同 operateType 下的命名/大小写并不统一 ——
 // 利用小时数：风电返回 usehour（全小写）、光伏返回 useHour（驼峰）；
 // 结算电价：两种发电类型都返回 electrovalence（不是 electricityPrice）。
 // 取值时按数组顺序取第一个非空值，兼容后端字段拼写差异
+// amount 标记金额类指标（收入 / 电价）：展示时整数部分加千分位
 const POWER_METRICS = [
   { label: '项目总数', field: ['projectCount'], unit: '个' },
   { label: '装机容量', field: ['capacity'], unit: 'MW' },
   { label: '上网电量', field: ['onlinePower'], unit: '万kWh' },
   { label: '利用小时数', field: ['usehour', 'useHour', 'useHours'], unit: 'h' },
-  { label: '结算电价', field: ['electrovalence', 'electricityPrice', 'elecPrice'], unit: '元/kWh' },
-  { label: '千瓦收入', field: ['income'], unit: '元/kW' }
+  { label: '结算电价', field: ['electrovalence', 'electricityPrice', 'elecPrice'], unit: '元/kWh', amount: true },
+  { label: '千瓦收入', field: ['income'], unit: '元/kW', amount: true }
 ]
 
 export const OPERATE_METRICS = {
@@ -187,8 +198,8 @@ export const OPERATE_METRICS = {
   // 非标：指标项不同（oneMetric 语义变为度电收入）
   nonstandard: [
     { label: '项目总数', field: ['projectCount'], unit: '个' },
-    { label: '填报收入', field: ['writeIncome'], unit: '万元' },
-    { label: '账户收入', field: ['accountIncome'], unit: '万元' },
+    { label: '填报收入', field: ['writeIncome'], unit: '万元', amount: true },
+    { label: '账户收入', field: ['accountIncome'], unit: '万元', amount: true },
     { label: '达标率', field: ['yield'], unit: '%' }
   ]
 }

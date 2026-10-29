@@ -185,6 +185,7 @@ import {
   OPERATE_TYPE_MAP,
   OPERATE_METRICS,
   OPERATE_CHART_FIELDS,
+  formatAmount,
   DEFAULT_QUERY,
   ROOT_LEVEL,
   ENERGY_TYPE_KEYS,
@@ -458,8 +459,8 @@ export default {
     pieData() {
       return (this.overview.industryNum || []).filter(item => item.industry !== INDUSTRY_ALL)
     },
-    // 饼图容器高度按数据行数自适应：行多时撑高（左栏内容区可滚动），避免图例挤压显示不完善
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
+    // 收入 / 电价属金额（配置里带 amount 标记）：整数部分加千分位展示
     summaryMetrics() {
       const conf = OPERATE_METRICS[this.operateEnergyType] || OPERATE_METRICS.wind
       const icons = SUMMARY_ICONS_MAP[this.operateEnergyType] || SUMMARY_ICONS_MAP.wind
@@ -469,9 +470,10 @@ export default {
         const key = Object.keys(icons).find(
           k => k === label || k.trim() === label || label.includes(k) || k.includes(label)
         )
+        const value = this.pickOperateValue(m.field)
         return {
           label: m.label,
-          value: this.pickOperateValue(m.field),
+          value: m.amount ? formatAmount(value) : value,
           unit: m.unit,
           icon: icons[key] || 'el-icon-document'
         }

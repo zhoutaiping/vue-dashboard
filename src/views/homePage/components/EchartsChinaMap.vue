@@ -294,7 +294,7 @@ export default {
       const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
       const rate = p.rate !== undefined ? p.rate : raw.rate
       const settle = p.editWindPrice || p.settlementPrice || raw.settlementPrice
-      const sube = p.subePrice || p.subsidyPrice || raw.subsidyPrice
+      const sube = p.subelePrice || p.subsidyPrice || raw.subsidyPrice
       return [
         { label: '实控人', value: fmt(p.actualController || raw.controller) },
         { label: '装机容量', value: `${fmt(capacity)}kW` },
