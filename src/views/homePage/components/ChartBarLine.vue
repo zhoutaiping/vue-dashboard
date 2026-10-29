@@ -5,6 +5,7 @@
 <script>
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
+import { getChartDpr } from '../uiScale'
 
 /**
  * 通用柱线混合图（双 Y 轴，纯展示）
@@ -85,6 +86,12 @@ export default {
     // 若只 resize 不重绘，窄栏的紧凑图例/隐藏单位会被带到宽布局里
     resize() {
       if (!this.chart) return
+      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
+      if (this.chartDpr !== getChartDpr()) {
+        this.chart.dispose()
+        this.initChart()
+        return
+      }
       this.chart.resize()
       this.legendLayoutWidth = this.legendLayoutWidth || 0
       if (this.legendLayoutWidth && Math.abs(this.chart.getWidth() - this.legendLayoutWidth) > 40) {
@@ -101,7 +108,9 @@ export default {
       })
     },
     initChart() {
-      this.chart = echarts.init(this.$refs.chart)
+      // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下图表被拉伸发虚
+      this.chartDpr = getChartDpr()
+      this.chart = echarts.init(this.$refs.chart, null, { devicePixelRatio: this.chartDpr })
       // 点击图例切换系列显隐时，image:// 图标 echarts 不会自动置灰，这里联动重建图例图标
       this.chart.on('legendselectchanged', params => {
         this.legendSelected = params.selected || {}

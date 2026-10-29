@@ -114,6 +114,7 @@
 
 <script>
 import * as echarts from 'echarts'
+import { getChartDpr } from '../uiScale'
 // 全国底图采用「分区版」GeoJSON：内蒙古拆成 蒙西/蒙东、河北拆成 冀北/河北南网
 // 由 scripts/build-split-map.js 生成（地市面多边形合并），properties.name 即区域名
 import chinaJson from '@/assets/maps/china.json'
@@ -369,6 +370,12 @@ export default {
     // 覆盖 resize mixin：容器尺寸变化后除了重绘，还要重排用 px 定位的颜色图例
     resize() {
       if (!this.chart) return
+      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
+      if (this.chartDpr !== getChartDpr()) {
+        this.chart.dispose()
+        this.initChart()
+        return
+      }
       this.chart.resize()
       // 尺寸变化后重新自适应放大（比例变了，原来的 zoom 会留白或溢出）
       this.fitMapZoom()
@@ -389,7 +396,9 @@ export default {
     // 全程只读模型/坐标系，不走 getOption + setOption（避免深拷贝与全量更新造成的卡顿）。
 
     initChart() {
-      this.chart = echarts.init(this.$refs.chart)
+      // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下地图被拉伸发虚
+      this.chartDpr = getChartDpr()
+      this.chart = echarts.init(this.$refs.chart, null, { devicePixelRatio: this.chartDpr })
       this.renderOption()
       this.chart.on('click', this.handleClick)
       // 主图缩放/平移时同步灰色底座：微任务中执行，与主图在同一帧重绘，视觉上完全同步
@@ -668,6 +677,9 @@ export default {
       this._legendLeft = legendLeft
 
       const option = {
+        // 地图与点位全部即时渲染：下钻省份 / 返回全国 / 数据刷新都不再走
+        // 「点位飞入 + 区域形变」的过渡动画，画面立刻可用（悬停高亮、缩放交互不受影响）
+        animation: false,
         tooltip: {
           trigger: 'item',
           confine: true,

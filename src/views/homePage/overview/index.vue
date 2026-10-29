@@ -1,5 +1,9 @@
 <template>
-  <div class="home-overview" :class="'home-overview--' + layoutMode">
+  <div
+    class="home-overview"
+    :class="'home-overview--' + layoutMode"
+    :style="{ '--ui-scale': uiScale }"
+  >
     <div class="home-overview__body">
       <!-- 地图铺满底层 -->
       <div class="home-overview__map">
@@ -79,9 +83,9 @@
               :field-map="PIE_FIELD_MAP"
               :colors="pieColors"
               :center-text="pieCenter"
-              :height="pieChartHeight"
+              height="100%"
             />
-            <div v-else class="pie-empty" :style="{ height: pieChartHeight }">暂无数据</div>
+            <div v-else class="pie-empty">暂无数据</div>
           </PanelCard>
 
           <PanelCard title="地区排名" :sub-title="regionTitle" class="panel-block panel-block--flex">
@@ -111,7 +115,7 @@
             :colors="MANAGE_COLORS"
             stack="total"
             unit="单位：个"
-            height="250px"
+            height="100%"
           />
         </PanelCard>
 
@@ -204,6 +208,7 @@ import {
   fullscreenIcon
 } from './config'
 import provinceIcon from '../province.svg'
+import { calcUiScale } from '../uiScale'
 
 // 布局分档（px，按页面主体宽度判定）：
 //   < 1024      → 纵向堆叠（「工具条 → 左栏 → 地图 → 右栏」，真放不下三栏时才开始整页滚动）
@@ -294,10 +299,20 @@ export default {
       capitalIcon: provinceIcon,
       // 页面主体宽度（动态检测，驱动宽屏/窄屏布局切换）
       // 初值取窗口宽度做兜底，避免小屏首帧先按宽屏渲染再跳变；mounted 后以真实容器宽度为准
-      pageWidth: typeof window !== 'undefined' ? window.innerWidth : 0
+      pageWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
+      // 视口尺寸（CSS 像素）：大屏缩放系数按它算，不能用页面主体宽度 ——
+      // 主体宽度是 zoom 之后回流出来的值，用它会自激
+      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
+      viewportHeight: typeof window !== 'undefined' ? window.innerHeight : 0
     }
   },
   computed: {
+    // 整页缩放系数：min(视口宽/1920, 视口高/1080)，1~2 倍。
+    // 超过 1080P 的屏（2K/带鱼屏/4K）整体等比放大，版式、图表、字号与 1080P 完全同比例；
+    // 1080P 及以上但不足 1 倍时保持 1（小屏继续走现有的多档样式）
+    uiScale() {
+      return calcUiScale(this.viewportWidth, this.viewportHeight)
+    },
     // 布局档位：narrow（纵向堆叠）/ medium（三栏 + 浮层 28%）/ wide（三栏 + 浮层 25%）
     layoutMode() {
       if (!this.pageWidth) return 'wide'
@@ -444,12 +459,6 @@ export default {
       return (this.overview.industryNum || []).filter(item => item.industry !== INDUSTRY_ALL)
     },
     // 饼图容器高度按数据行数自适应：行多时撑高（左栏内容区可滚动），避免图例挤压显示不完善
-    pieChartHeight() {
-      // 高度只需容纳右侧图例（每行 28px）+ 上下留白：环图直径按容器宽算（原型比例），
-      // 不再需要靠拉高容器把环撑大，收紧后与原型卡片比例一致
-      const rows = (this.pieData || []).length
-      return Math.max(160, rows * 28 + 30) + 'px'
-    },
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
     summaryMetrics() {
       const conf = OPERATE_METRICS[this.operateEnergyType] || OPERATE_METRICS.wind
@@ -777,6 +786,9 @@ export default {
     measurePageWidth() {
       const width = this.$el ? this.$el.clientWidth : 0
       if (width && width !== this.pageWidth) this.pageWidth = width
+      // 视口尺寸（未缩放）：驱动 uiScale
+      if (window.innerWidth !== this.viewportWidth) this.viewportWidth = window.innerWidth
+      if (window.innerHeight !== this.viewportHeight) this.viewportHeight = window.innerHeight
     },
     // 统一请求：单个接口失败不影响其他模块
     async safeRequest(fn, defaultValue) {
@@ -1165,7 +1177,13 @@ export default {
 .home-overview {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 84px);
+  /* 大屏适配：--ui-scale 由 JS 按 min(视口宽/1920, 视口高/1080) 算出（1~2）。
+     用 zoom 而不是 transform: scale —— zoom 真正参与排版，文字按放大后的字号重新渲染（不发虚）；
+     图表画布清晰度由组件把同一系数乘进 devicePixelRatio 解决（uiScale.getChartDpr）。
+     宽度不用除 scale（zoom 元素的百分比基准已被浏览器按 scale 折算过），
+     但高度里的 vh 是按物理视口算的，必须除回去，否则放大后纵向溢出 */
+  zoom: var(--ui-scale, 1);
+  height: calc((100vh - 84px) / var(--ui-scale, 1));
   background: #f0f2f5;
   box-sizing: border-box;
   overflow: hidden;
@@ -1198,7 +1216,8 @@ export default {
 
   /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
   &:fullscreen {
-    height: 100vh;
+    /* 全屏时高度同样按缩放系数折算，否则 zoom 会把全屏内容放大到超出屏幕 */
+    height: calc(100vh / var(--ui-scale, 1));
     padding: 0;
   }
 
@@ -1298,7 +1317,25 @@ export default {
         font-family: Arial-regular;
       }
 
-      /* 低分辨率（1080P）兼容：运营项目情况面板只保一个可用下限，
+      /* 上卡（建设/运营管理项目报表）高度由「自身宽度」驱动：1080P 实测 428 × 314 ≈ 1.37:1。
+         只按列高百分比锁（旧的 32.3%）时，带鱼屏/超宽屏栏宽变大而列高不变，
+         卡片会被拉成 2:1 的扁条、柱线图挤成一条——改成宽高比后卡片随宽度同步长高。
+         max-height 46% 兜住极端宽高比，保证下卡（运营项目情况）仍有充足空间 */
+      .panel-card:first-child {
+        /* 不支持 aspect-ratio 时的回落：按 1080P 的高度占比 */
+        flex: 0 0 32.3%;
+        min-height: 262px;
+      }
+
+      @supports (aspect-ratio: 1) {
+        .panel-card:first-child {
+          flex: 0 0 auto;
+          aspect-ratio: 1.37;
+          max-height: 46%;
+        }
+      }
+
+      /* 低分辨率（1080P 纵向 720~768）兼容：下卡只保一个可用下限，
          不被压成 0；内容超出由面板自身滚动承载（见底部 .summary-card），不顶出整列 */
       .summary-card {
         min-height: 200px;
@@ -1313,6 +1350,30 @@ export default {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+
+    /* 项目总览高度跟着「内容」自适应：卡片上半部（标题 + 两条指标）是固定量，
+       下半部环图区按 1080P 实测 404 × 169 ≈ 2.39:1 锁比例 —— 栏宽变大时环图区同步变高，
+       环图按宽度等比放大，卡片高度自然跟着长，不会有「卡片被拉高、环图不跟大」的空白。
+       只给卡片一个宽高比是错的：环图尺寸由宽度决定，卡片长高后底部会空一片 */
+    > .panel-card:first-child {
+      flex: 0 0 auto;
+      min-height: 286px;
+    }
+
+    > .panel-card:first-child ::v-deep .panel-card__body {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 环图区（含空态占位）按固定宽高比撑高：组件内联 height:100% 要压掉，
+       否则 aspect-ratio 不生效 */
+    > .panel-card:first-child ::v-deep .chart-pie,
+    > .panel-card:first-child ::v-deep .pie-empty {
+      flex: 0 0 auto;
+      height: auto !important;
+      aspect-ratio: 2.39;
+    }
 
     /* 滚动条默认不出现，hover 时显示细滚动条 */
     &::-webkit-scrollbar {
@@ -1501,8 +1562,10 @@ export default {
 }
 
 /* 项目总览环图空态（行业全不选时无数据）：与排名列表的空态文案保持一致，
-   高度跟环图一致，避免面板高度跳动 */
+   高度跟环图一致（撑满卡片剩余高度），避免面板高度跳动 */
 .pie-empty {
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;

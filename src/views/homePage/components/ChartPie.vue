@@ -5,6 +5,7 @@
 <script>
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
+import { getChartDpr } from '../uiScale'
 
 // 右侧竖向图例占用的宽度（px）：图标 12 + 间距 5 + label 62 + 「1136个(38%)」约 79 ≈ 158
 // 环形图圆心按「容器宽 - 图例宽」剩余空间居中，宽度越窄圆心越靠左
@@ -149,6 +150,12 @@ export default {
     // （连续拖拽窗口时比例不变就跳过，避免无谓重绘）
     resize() {
       if (!this.chart) return
+      // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
+      if (this.chartDpr !== getChartDpr()) {
+        this.chart.dispose()
+        this.initChart()
+        return
+      }
       this.chart.resize()
       const geo = this.pieGeometry()
       const key = `${geo.centerRatio.toFixed(3)}|${geo.outer}`
@@ -166,7 +173,9 @@ export default {
       })
     },
     initChart() {
-      this.chart = echarts.init(this.$refs.chart)
+      // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下图表被拉伸发虚
+      this.chartDpr = getChartDpr()
+      this.chart = echarts.init(this.$refs.chart, null, { devicePixelRatio: this.chartDpr })
       this.renderChart()
       this.chart.on('click', params => {
         this.$emit('item-click', params)
