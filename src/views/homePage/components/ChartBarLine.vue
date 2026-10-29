@@ -7,6 +7,7 @@ import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
 import { getChartDpr } from '../uiScale'
 import { formatAmount } from '../format'
+import { patchZoomPointer } from '../pointer'
 
 /**
  * 通用柱线混合图（双 Y 轴，纯展示）
@@ -65,6 +66,8 @@ export default {
   },
   mounted() {
     this.initChart()
+    // 整页 zoom 放大后（2K/4K、全屏）鼠标命中点会按放大倍数偏移，换算回画布布局坐标
+    this.unpatchPointer = patchZoomPointer(this.$refs.chart)
     // 容器尺寸变化（flex 自适应高度、卡片显隐等）时图表跟随缩放，window resize 覆盖不到这些场景
     if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
       this.resizeObserver = new ResizeObserver(() => {
@@ -74,6 +77,10 @@ export default {
     }
   },
   beforeDestroy() {
+    if (this.unpatchPointer) {
+      this.unpatchPointer()
+      this.unpatchPointer = null
+    }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect()
       this.resizeObserver = null

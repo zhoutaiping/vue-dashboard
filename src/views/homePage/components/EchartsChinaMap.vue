@@ -121,6 +121,7 @@ import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
 import { REGION_PRICE_COMPARE, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
+import { patchZoomPointer } from '../pointer'
 import priceIcon from '../price.png'
 
 // 注册中国地图（模块级只注册一次）
@@ -341,6 +342,8 @@ export default {
   },
   mounted() {
     this.initChart()
+    // 整页 zoom 放大后（2K/4K、全屏）鼠标命中点会按放大倍数偏移，换算回画布布局坐标
+    this.unpatchPointer = patchZoomPointer(this.$refs.chart)
     // 容器尺寸变化（父级改为百分比宽高、窄屏堆叠布局切换导致地图形变区域变化）时跟随缩放；
     // resize mixin 只监听 window resize，覆盖不到这些场景，会导致地图拉伸变形或留白
     if (this.$refs.chart && typeof ResizeObserver !== 'undefined') {
@@ -350,6 +353,10 @@ export default {
     }
   },
   beforeDestroy() {
+    if (this.unpatchPointer) {
+      this.unpatchPointer()
+      this.unpatchPointer = null
+    }
     if (this._maskTimer) {
       clearTimeout(this._maskTimer)
       this._maskTimer = null

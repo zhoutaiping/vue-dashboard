@@ -6,6 +6,7 @@
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
 import { getChartDpr } from '../uiScale'
+import { patchZoomPointer } from '../pointer'
 
 // 右侧竖向图例占用的宽度（px）：图标 12 + 间距 5 + label 62 + 「1136个(38%)」约 79 ≈ 158
 // 环形图圆心按「容器宽 - 图例宽」剩余空间居中，宽度越窄圆心越靠左
@@ -85,6 +86,8 @@ export default {
   },
   mounted() {
     this.initChart()
+    // 整页 zoom 放大后（2K/4K、全屏）鼠标命中点会按放大倍数偏移，换算回画布布局坐标
+    this.unpatchPointer = patchZoomPointer(this.$refs.chart)
     // 容器尺寸变化（flex 自适应、面板显隐）时图表跟随缩放，window resize 覆盖不到这些场景
     // 走 resize() 而非直接 chart.resize()：圆心比例也要随宽度重算
     if (typeof ResizeObserver !== 'undefined' && this.$refs.chart) {
@@ -93,6 +96,10 @@ export default {
     }
   },
   beforeDestroy() {
+    if (this.unpatchPointer) {
+      this.unpatchPointer()
+      this.unpatchPointer = null
+    }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect()
       this.resizeObserver = null

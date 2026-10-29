@@ -1357,21 +1357,23 @@ export default {
     }
   }
 
-  /* 左栏内容滚动区：项目总览 + 地区排名，超出时内部滚动 */
+  /* 左栏内容区：项目总览 + 地区排名。两个卡片都能跟着列高收缩（见下方 flex 与 min-height），
+     正常情况下内容永远放得下，所以这里用 hidden 而不是 auto —— 左栏不允许出现滚动条 */
   &__left-scroll {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
 
     /* 项目总览高度跟着「内容」自适应：卡片上半部（标题 + 两条指标）是固定量，
        下半部环图区按 1080P 实测 404 × 169 ≈ 2.39:1 锁比例 —— 栏宽变大时环图区同步变高，
        环图按宽度等比放大，卡片高度自然跟着长，不会有「卡片被拉高、环图不跟大」的空白。
-       只给卡片一个宽高比是错的：环图尺寸由宽度决定，卡片长高后底部会空一片 */
+       只给卡片一个宽高比是错的：环图尺寸由宽度决定，卡片长高后底部会空一片。
+       flex-shrink: 1 —— 列高不足时卡片先让位给地区排名，避免顶出滚动条 */
     > .panel-card:first-child {
-      flex: 0 0 auto;
-      min-height: 286px;
+      flex: 0 1 auto;
+      min-height: 240px;
     }
 
     > .panel-card:first-child ::v-deep .panel-card__body {
@@ -1381,12 +1383,14 @@ export default {
     }
 
     /* 环图区（含空态占位）按固定宽高比撑高：组件内联 height:100% 要压掉，
-       否则 aspect-ratio 不生效 */
+       否则 aspect-ratio 不生效。同样允许收缩（min-height 110px）：
+       让位顺序是「环图先变扁 → 卡片才变矮」，环图不会消失 */
     > .panel-card:first-child ::v-deep .chart-pie,
     > .panel-card:first-child ::v-deep .pie-empty {
-      flex: 0 0 auto;
+      flex: 0 1 auto;
       height: auto !important;
       aspect-ratio: 2.39;
+      min-height: 110px;
     }
 
     /* 滚动条默认不出现，hover 时显示细滚动条 */
@@ -1548,13 +1552,12 @@ export default {
      代价是长数值会把指标区多撑一行，图表由下方 min-height 兜底（最小值 150px） */
 
   .hours-chart {
-    flex: 1;
-    /* 图表最小高度 150px（原型注2「下面表格高度压缩，最小值 150px」）：
-       指标区因换行多吃高度时，先压缩图表，压到 150px 仍不够则由上面的 overflow-y: auto 出滚动条 */
+    flex: 1 1 auto;
+    /* 高度自适应：吃满卡片剩余空间，指标区换行多吃高度时先压图表。
+       下限 150px（原型注2「下面表格高度压缩，最小值 150px」），
+       压到 150 仍放不下才由上面的 overflow-y: auto 出滚动条 */
     min-height: 150px;
     margin-top: 8px;
-    /* 滚动容器内不被压缩到 0，保证图表始终可读 */
-    flex-shrink: 0;
   }
 }
 
@@ -1571,7 +1574,7 @@ export default {
 
   /* 列表换行撑高后，下方图表被压缩时的最小高度（与 .summary-card .hours-chart 保持一致） */
   .chart-bar-line {
-    min-height: 160px;
+    min-height: 150px;
   }
 }
 
@@ -1585,5 +1588,41 @@ export default {
   justify-content: center;
   color: #c0c4cc;
   font-size: 13px;
+}
+
+/* ==================== 矮视口（1080P 带浏览器界面）压缩 ====================
+   整页按 1920×1080 设计稿缩放，但 uiScale 最小为 1（小视口不缩），
+   1080P 屏被菜单栏/地址栏/书签栏占掉高度后（视口高 ~780~880），
+   逻辑可用高度只剩 800 上下，右「运营项目情况」的指标卡（数据长时折成 4 行，192px）
+   加图表 150px 会超出卡片。这里压缩行高与内边距把高度让给图表，
+   尽量让它在 150px 下限内放得下；实在放不下时由卡片自身的 overflow-y: auto 滚动兜底。
+   左「项目总览」不在这里处理：环图区与卡片都能随列高收缩，且列内容区是 hidden，
+   任何高度下都不会出现滚动条。无浏览器界面时不会命中 */
+@media (max-height: 900px) {
+  .summary-card {
+    /* 指标卡：行高 40 → 34、外边距 4 → 3、内边距 8 → 5/8，4 行合计省约 44px */
+    ::v-deep .metric-list.is-card .metric-item {
+      height: 34px;
+      margin: 3px;
+      padding: 5px 8px;
+    }
+
+    ::v-deep .metric-list.is-card .metric-item__label {
+      font-size: 13px;
+    }
+
+    ::v-deep .metric-list.is-card .metric-item__value {
+      font-size: 17px;
+    }
+
+    /* 卡片内边距 12 → 10：再给图表下限腾 4px */
+    ::v-deep .panel-card__body {
+      padding: 10px 12px;
+    }
+
+    .hours-chart {
+      margin-top: 4px;
+    }
+  }
 }
 </style>
