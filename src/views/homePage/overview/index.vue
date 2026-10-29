@@ -149,6 +149,7 @@
 
 <script>
 import PanelCard from '../components/PanelCard'
+import { formatAmount } from '../format'
 import MetricList from '../components/MetricList'
 import ChartPie from '../components/ChartPie'
 import ChartBarLine from '../components/ChartBarLine'
@@ -185,7 +186,6 @@ import {
   OPERATE_TYPE_MAP,
   OPERATE_METRICS,
   OPERATE_CHART_FIELDS,
-  formatAmount,
   DEFAULT_QUERY,
   ROOT_LEVEL,
   ENERGY_TYPE_KEYS,
@@ -490,6 +490,8 @@ export default {
           name: f.label,
           type: f.type,
           yAxisIndex: f.type === 'line' ? 1 : 0,
+          // 金额系列（非标填报收入）：tooltip 数值加千分位
+          amount: !!f.amount,
           data: list.map(item => {
             const value = Number(item[f.field]) || 0
             // 达标率口径兼容：接口可能返回比率（0.85）也可能返回百分数（85），

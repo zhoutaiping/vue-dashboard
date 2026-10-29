@@ -6,10 +6,12 @@
 import * as echarts from 'echarts'
 import resize from '@/components/Charts/mixins/resize'
 import { getChartDpr } from '../uiScale'
+import { formatAmount } from '../format'
 
 /**
  * 通用柱线混合图（双 Y 轴，纯展示）
- * series 由外部传入：[{ name, type: 'bar'|'line', data, yAxisIndex, color }]
+ * series 由外部传入：[{ name, type: 'bar'|'line', data, yAxisIndex, color, amount }]
+ * amount: true 表示该系列是金额（收入/电价），仅用于 tooltip 千分位展示，不进入 echarts 配置
  * 不绑定任何业务字段，便于迁移复用
  */
 export default {
@@ -182,11 +184,13 @@ export default {
     renderChart() {
       if (!this.chart) return
       const hasSecondAxis = this.series.some(s => s.yAxisIndex === 1)
+      // 金额标记按系列下标缓存在组件内：amount 仅供 tooltip 使用，不进入 echarts 配置
+      const amountFlags = this.series.map(s => !!s.amount)
       const series = this.series.map((s, index) => {
         // colors prop 为权威取色来源；系列自带 color 仅作兜底，避免后端数据携带 color 时覆盖配置
         const color = this.colors[index % this.colors.length] || s.color
         const isLine = (s.type || 'bar') === 'line'
-        return Object.assign({}, s, {
+        const mapped = Object.assign({}, s, {
           type: isLine ? 'line' : 'bar',
           yAxisIndex: s.yAxisIndex || 0,
           // 保留外部传入的 itemStyle（如折线白心圆点），仅补默认颜色
@@ -206,6 +210,8 @@ export default {
             )
           } : {})
         })
+        delete mapped.amount
+        return mapped
       })
 
       // 各 Y 轴的数据合集：用于判断该轴是否为「整数轴」（项目个数这类不能出现小数刻度）
@@ -282,7 +288,10 @@ export default {
               const marker = isLine
                 ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:2px solid ${color};box-sizing:border-box;margin-right:6px;vertical-align:-1px;"></span>`
                 : `<span style="display:inline-block;width:12px;height:6px;border-radius:3px;background:${color};margin-right:6px;vertical-align:-1px;"></span>`
-              const value = p.value == null ? '-' : p.value
+              // 金额系列（收入/电价）：整数部分加千分位，与指标卡口径一致
+              const value = p.value == null
+                ? '-'
+                : (amountFlags[idx] ? formatAmount(p.value) : p.value)
               // 单位跟随系列所在 Y 轴（柱=h/个、折线=%），与轴名/刻度保持同一口径
               const unit = this.valueUnit((series[idx] && series[idx].yAxisIndex) || 0)
               const unitHtml = unit && p.value != null

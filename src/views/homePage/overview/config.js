@@ -167,16 +167,6 @@ export const ENERGY_TYPE_KEYS = ['wind', 'pv', 'nonstandard']
 // 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏; 3.非标）
 export const OPERATE_TYPE_MAP = { wind: '1', pv: '2', nonstandard: '3' }
 
-// 金额展示：整数部分加千分位，小数部分原样保留（不四舍五入、不补位、不加千分位）。
-// 只处理纯数字（含负号与小数）的数值或数字字符串；空值、带单位、科学计数法等原样返回，
-// 由调用方（MetricList 等）决定占位显示
-export function formatAmount(value) {
-  if (value === null || value === undefined || value === '') return value
-  const matched = /^(-?)(\d+)(\.\d+)?$/.exec(String(value).trim())
-  if (!matched) return value
-  return `${matched[1]}${matched[2].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${matched[3] || ''}`
-}
-
 // 运营项目情况指标：energyType → 指标项
 // field 支持「候选字段数组」：后端同一语义在不同 operateType 下的命名/大小写并不统一 ——
 // 利用小时数：风电返回 usehour（全小写）、光伏返回 useHour（驼峰）；
@@ -206,6 +196,7 @@ export const OPERATE_METRICS = {
 
 // 运营项目情况图表：energyType → 柱线图系列映射
 // 风电/光伏取 powerLineChart（oneMetric=利用小时数）；非标取 nonPowerLineChart（oneMetric=度电收入）；yield=达标率折线
+// amount 标记金额系列（非标填报收入）：tooltip 数值按金额加千分位
 export const OPERATE_CHART_FIELDS = {
   wind: [
     { field: 'oneMetric', label: '风电发电利用小时数', type: 'bar' },
@@ -216,7 +207,7 @@ export const OPERATE_CHART_FIELDS = {
     { field: 'yield', label: '达标率', type: 'line' }
   ],
   nonstandard: [
-    { field: 'oneMetric', label: '填报收入', type: 'bar' },
+    { field: 'oneMetric', label: '填报收入', type: 'bar', amount: true },
     { field: 'yield', label: '达标率', type: 'line' }
   ]
 }
