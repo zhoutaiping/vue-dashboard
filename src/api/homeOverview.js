@@ -68,6 +68,18 @@ export function queryMapDisplay(data) {
   return postRequest('/largeScreen/mapDisplay', data)
 }
 
+// 地图电价（地图电价展示 + 热力着色）：POST /largeScreen/mapDisplay/price
+// 入参与 mapDisplay 完全一致：{ industry, month, provinceName, status }
+//   - provinceName 为空 → 全国：返回「省名 / 业务区域名（蒙西/蒙东、冀北/河北南网）→ 电价」
+//   - 已下钻省份 → 返回「地市名 → 电价」（key 与地图 GeoJSON 区域名一致）
+// 返回 data 为 Map（省名/地市名 → MapPriceOverviewDto）：
+//   avgPvSettlementPrice 光伏平均结算电价、avgWindSettlementPrice 风电平均结算电价、
+//   benchmarkPrice 标杆电价、pvSettlementPrice 光伏结算电价、windSettlementPrice 风电结算电价
+// 该接口只提供电价，点位/项目数仍由 mapDisplay 提供；某项电价为空时前端回退 mapDisplay 的同名字段
+export function queryMapPrice(data) {
+  return postRequest('/largeScreen/mapDisplay/price', data)
+}
+
 // 建设/运营管理项目报表：POST /largeScreen/queryBuildandOperate
 // 入参与项目总览一致：{ industry, month, provinceName, status }
 // 返回 data: [{ month, constructionCount, operationCount, outstandingCount }]（逐月数组）

@@ -164,6 +164,7 @@ import {
   queryNationalRanking,
   queryRegionRanking,
   queryMapDisplay,
+  queryMapPrice,
   queryProjectDetail
 } from '@/api/homeOverview'
 
@@ -193,6 +194,7 @@ import {
   SUBSIDY_FILTERS,
   PRICE_OPTIONS,
   pickPriceValue,
+  pickPriceFields,
   STATUS_PARAM_MAP,
   INDUSTRY_ALL,
   PROVINCE_LIST,
@@ -293,6 +295,9 @@ export default {
       activeLayers: [],
       // 地图展示原始数据（mapDisplay 返回：全国=省份数组，省份=单对象；归一化存为省份数组）
       provinceGroups: [],
+      // 地图电价数据（mapDisplay/price 返回）：[{ name: 省名/地市名, _short: 地图区域名, fields: 电价字段 }]
+      // 只提供电价（着色/热力/浮层），点位与项目数仍来自 provinceGroups
+      priceGroups: [],
       // 地图点位分类（补贴属性三分类：无补贴/已补贴/合规清单）
       pointCategories: POINT_CATEGORIES,
       // 省会标记点 + 图标
@@ -571,6 +576,18 @@ export default {
       })
       return list
     },
+    // 电价接口（/largeScreen/mapDisplay/price）索引：地图区域名 → 电价字段
+    // 全国视图的 key 是省名/业务区域名，下钻后是地市名，与 mapDisplay 的分组名同一套口径；
+    // 同时用 {@link resolveGroupName} 归一出的短名/区域名再登记一份，两种写法都能查到
+    priceLookup() {
+      const map = {}
+      ;(this.priceGroups || []).forEach(item => {
+        if (!item || !item.fields) return
+        if (item.name) map[item.name] = item.fields
+        if (item._short) map[item._short] = item.fields
+      })
+      return map
+    },
     // 地图着色数据：按左下角选中的电价维度取聚合值
     // 全国视图 → 各省汇总值；省份下钻 → 该省各市区值（按市区粒度着色，visualMap 随之展示）
     // 取值兼容：字段候选列表（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.4155"）；
@@ -623,8 +640,11 @@ export default {
         .filter(Boolean)
         .map(regionName => (REGION_META[regionName] || {}).province)
         .filter(Boolean)
-      if (!splitProvinces.length) return groups
-      return groups.filter(group => splitProvinces.indexOf(this.rawGroupName(group)) < 0)
+      const list = splitProvinces.length
+        ? groups.filter(group => splitProvinces.indexOf(this.rawGroupName(group)) < 0)
+        : groups
+      // 电价统一以电价接口（mapDisplay/price）为准：接口没返回该区域时保留 mapDisplay 自带字段
+      return list.map(group => this.withApiPrice(group, this.resolveGroupName(group)))
     },
 
     // 省级下钻的地市条目：把两种返回形态统一成 [{ name: 地市名, ...电价字段, projectList }]
@@ -644,10 +664,12 @@ export default {
           // 分组里没有 projectCount：与 cityPriceList 字段对齐，浮层显示项目数
           projectCount: (group.projectList || []).length
         }))
+      // 地市电价统一以电价接口（mapDisplay/price）为准：接口没返回该地市时保留 mapDisplay 自带字段
+      const withPrice = list.map(c => this.withApiPrice(c, c.name))
       const region = this.query.regionName
-      if (!region) return list
+      if (!region) return withPrice
       const province = this.currentProvinceShort
-      return list.filter(c => {
+      return withPrice.filter(c => {
         const cityRegion = cityRegionName(province, c.name)
         return !cityRegion || cityRegion === region
       })
@@ -827,6 +849,7 @@ export default {
       this.operateDetail = {}
       this.rankList = []
       this.provinceGroups = []
+      this.priceGroups = []
     },
     async fetchOverview(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
@@ -915,7 +938,9 @@ export default {
         this.fetchManageTrend(seq),
         this.fetchOperateDetail(seq),
         this.fetchRank(seq),
-        this.fetchMapDisplay(seq)
+        this.fetchMapDisplay(seq),
+        // 地图电价与 mapDisplay 同一批取数：入参一样，下钻/返回/切行业/切月份都随之刷新
+        this.fetchMapPrice(seq)
       ])
     },
     // 地图展示：POST queryMapDisplay，入参 = 全局报表参数
@@ -929,6 +954,55 @@ export default {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
       if (this.isStale(seq)) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
+    },
+    // 地图电价：POST queryMapPrice，入参 = 全局报表参数（与 mapDisplay 完全一致）
+    // 全国 → 「省名/业务区域名 → 电价」，下钻 → 「地市名 → 电价」，只用于电价着色（热力）与悬浮浮层
+    // 接口整体失败时保持空数组：此时各分组沿用 mapDisplay 自带的电价字段，地图不失去着色
+    async fetchMapPrice(seq = this.nextSeq()) {
+      const data = await this.safeRequest(() => queryMapPrice(this.reportParams), {})
+      if (this.isStale(seq)) return
+      this.priceGroups = this.normalizePriceGroups(data)
+    },
+    // 电价返回归一化：{ 省名: 电价 } / [{ name, ...电价 }] / 单条电价 → [{ name, _short, fields }]
+    // _short 是地图上的区域名（省短名或业务区域名），与 resolveGroupName 的口径一致，用于二次索引
+    normalizePriceGroups(data) {
+      const list = []
+      const add = (key, value) => {
+        const fields = pickPriceFields(value)
+        if (!fields) return
+        const name = String(key || '')
+        if (!name) return
+        const short = provinceShortName(name)
+        list.push({ name, _short: normalizeRegionName(short) || short, fields })
+      }
+      // Swagger 里 Map 值可能被包成 { additionalProperties1: { 山东省: {...} } }，逐层剥开
+      let payload = data
+      for (let i = 0; i < 3; i += 1) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) break
+        const keys = Object.keys(payload)
+        const wrapped = keys.filter(key => /^additionalProperties\d*$/.test(key))
+        if (wrapped.length !== 1 || keys.length !== 1) break
+        payload = payload[wrapped[0]]
+      }
+      if (Array.isArray(payload)) {
+        payload.forEach(item => add(item.name || item.provinceName || item.cityName, item))
+        return list
+      }
+      if (payload && typeof payload === 'object') {
+        // 单条电价（下钻后后端只回一条当前省/区域汇总）：挂到当前省份名下，不参与地市着色
+        if (pickPriceFields(payload)) {
+          add(this.currentProvinceShort, payload)
+          return list
+        }
+        Object.keys(payload).forEach(key => add(key, payload[key]))
+      }
+      return list
+    },
+    // 把电价接口的字段合并到分组/地市数据上（不覆盖 name、projectList 等非电价字段）；
+    // 接口没返回该区域时原样返回，避免把 mapDisplay 的电价也抹掉
+    withApiPrice(obj, name) {
+      const price = name ? this.priceLookup[name] : null
+      return price ? Object.assign({}, obj, price) : obj
     },
     // mapDisplay 返回归一化：数组 / 单对象 / 省名 key 映射 → 省份数组
     normalizeProvinceGroups(data) {
@@ -1024,6 +1098,8 @@ export default {
       // 下钻瞬间若不清空，全国的点会被画到省地图上（错位、跳一下再回来）。
       // 先清空，等本批 queryMapDisplay 返回后一次性渲染，全过程无动画
       this.provinceGroups = []
+      // 电价同理：全国是按省名的电价，先清掉，避免省内地市短暂挂上「同名省份」的电价
+      this.priceGroups = []
       // 区域下钻：记录业务区域，驱动地图只画该区域地市、接口按区域取数
       this.query.regionName = region || ''
       this.query.cityCode = ''
@@ -1109,6 +1185,8 @@ export default {
       this.levels = [Object.assign({}, ROOT_LEVEL)]
       // 同下钻：先清空地图点位来源，避免省内点位被画到全国图上
       this.provinceGroups = []
+      // 电价同理：省内是地市粒度的电价，全国图按省名取，先清掉等本批接口返回
+      this.priceGroups = []
       // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
       this.priceType = this.defaultPriceType
     },

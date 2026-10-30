@@ -300,6 +300,37 @@ export function pickPriceValue(obj, fields) {
   return null
 }
 
+// 电价接口（/largeScreen/mapDisplay/price）的字段集合：接口只返回这几项，
+// 取出来后整体覆盖到 mapDisplay 的分组/地市数据上，供着色、热力与悬浮浮层共用
+export const PRICE_DTO_FIELDS = [
+  'avgSettlementPrice',
+  'avgWindSettlementPrice',
+  'avgPvSettlementPrice',
+  'pvSettlementPrice',
+  'windSettlementPrice',
+  'benchmarkPrice',
+  'spotWindSettlementPrice',
+  'spotPvSettlementPrice'
+]
+
+// 从电价接口的单条数据里摘出有效电价字段（空串/undefined 不带走，避免覆盖掉 mapDisplay 的旧值）；
+// 一项都没有时返回 null，调用方据此保留原数据
+export function pickPriceFields(source) {
+  if (!source || typeof source !== 'object') return null
+  const out = {}
+  PRICE_DTO_FIELDS.forEach(key => {
+    const val = source[key]
+    if (val !== undefined && val !== null && val !== '') out[key] = val
+  })
+  // 兼容 Swagger 里 Map 值被包一层 { additionalProperties1: {...} } 的形态
+  if (!Object.keys(out).length) {
+    const wrapped = Object.keys(source).filter(key => /^additionalProperties\d*$/.test(key))
+    if (wrapped.length === 1) return pickPriceFields(source[wrapped[0]])
+    return null
+  }
+  return out
+}
+
 // 地图悬浮省份 / 市区浮层展示行（交互8）：
 // 差值 = 电价 - spot 均价；>0 绿色 + 向下箭头，<0 红色 + 向上箭头
 // 左下角电价菜单选中某维度时仅展示该行，未选中展示全部

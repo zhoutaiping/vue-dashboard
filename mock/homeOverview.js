@@ -225,6 +225,21 @@ function buildCityPriceList(province) {
     .filter(Boolean)
 }
 
+// 电价接口（mapDisplay/price）单条数据：字段与 swagger 一致，只含电价
+// seed 带固定偏移（+300 起），保证与 mapDisplay 里的电价不同 —— 前端一旦回退到旧字段，
+// 页面数值会立刻变化，便于自检「电价是不是真的走了新接口」
+function buildPriceOnly(seed) {
+  const pv = String(randomInt(25, 55, seed + 301) / 100)
+  const wind = String(randomInt(25, 55, seed + 302) / 100)
+  return {
+    avgPvSettlementPrice: pv,
+    avgWindSettlementPrice: wind,
+    benchmarkPrice: String(randomInt(25, 50, seed + 303) / 100),
+    pvSettlementPrice: pv,
+    windSettlementPrice: wind
+  }
+}
+
 function buildMonths(count) {
   const months = []
   const now = new Date()
@@ -347,6 +362,40 @@ module.exports = [
         rankingType,
         17
       ))
+    }
+  },
+
+  // 地图电价：POST /largeScreen/mapDisplay/price
+  // 入参 { industry, month, provinceName, status }（与 mapDisplay 完全一致）
+  // 全国（provinceName 空）→ { 省名/业务区域名: 电价 }；省份下钻 → { 地市名: 电价 }
+  // 只返回电价，不含项目列表；key 与地图 GeoJSON 区域名一致，前端据此着色（热力）与浮层展示
+  {
+    url: '/largeScreen/mapDisplay/price',
+    type: 'post',
+    response: config => {
+      const body = config.body || {}
+      if (body.provinceName) {
+        const requestName = String(body.provinceName)
+        // 区域下钻（蒙西/蒙东、冀北/河北南网）：区域名不是省份名，先反查归属省份
+        const regionHit = findSplitRegion(requestName)
+        const p = (regionHit && PROVINCES.find(x => x.name === regionHit.province)) ||
+          PROVINCES.find(x => requestName.indexOf(x.name) > -1) || PROVINCES[0]
+        let cities = buildCityPriceList(p)
+        if (regionHit) cities = cities.filter(c => regionHit.cities.some(n => c.name.indexOf(n) > -1))
+        const result = {}
+        cities.forEach((c, i) => { result[c.name] = buildPriceOnly(i * 7 + 11) })
+        return ok(result)
+      }
+      const result = {}
+      PROVINCES.forEach((p, i) => {
+        const splits = SPLIT_REGIONS[p.name]
+        if (splits) {
+          splits.forEach((r, j) => { result[r.name] = buildPriceOnly(i * 10 + j + 200) })
+          return
+        }
+        result[fullProvinceName(p.name)] = buildPriceOnly(i + 2)
+      })
+      return ok(result)
     }
   },
 
