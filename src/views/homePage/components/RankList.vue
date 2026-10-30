@@ -25,7 +25,7 @@
         <div class="rank-item__content">
           <div class="rank-item__top">
             <span class="rank-item__name" :title="item.name">{{ item.name }}</span>
-            <span class="rank-item__value" :class="rankClass(index)">
+            <span class="rank-item__value" :class="[rankClass(index), { 'is-empty': item.isEmpty }]">
               {{ item.text }}
               <!-- <em v-if="unit">{{ unit }}</em> -->
             </span>
@@ -83,11 +83,14 @@ export default {
         const raw = item[this.fieldMap.value]
         const value = Number(raw) || 0
         const percent = this.maxValue > 0 ? Math.round((value / this.maxValue) * 100) : 0
+        // 无值（null/undefined/空串）展示占位符 --；0 是有效值，照常显示 0，进度条按 0 处理
+        const isEmpty = raw === null || raw === undefined || raw === ''
         return {
           key: item[this.fieldMap.code] || index,
           name: item[this.fieldMap.name],
           value,
-          text: this.formatter ? this.formatter(raw, item) : raw,
+          isEmpty,
+          text: isEmpty ? '--' : (this.formatter ? this.formatter(raw, item) : raw),
           percent,
           raw: item
         }
@@ -282,6 +285,12 @@ export default {
 
   &.is-rank-3 {
     color: #f2c320;
+  }
+
+  /* 无值占位（--）：不参与名次配色，用次要灰提示「无数据」 */
+  &.is-empty {
+    color: #c0c4cc;
+    font-weight: 400;
   }
 
   em {
