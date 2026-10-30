@@ -343,10 +343,17 @@ export const REGION_PRICE_COMPARE = [
   { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
 ]
 
+// 最小可选月份：2024-01 之前的月份不允许选择（地图电价/报表数据从 2024-01 起才有）
+export const MIN_MONTH = '2024-01'
+
 // 默认查询月份：M-4（当前月往前推 4 个月，yyyy-MM）
 // 例：当前 2026-10 → 2026-06。用 new Date(y, m - 4, 1) 由 Date 处理跨年借位，无需手工换算
 const now = new Date()
 const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 4, 1)
+// 不超过最小可选月份（如当前为 2024 年初，M-4 会落到 2023 年，需夹到 2024-01）
+const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
+const minMonthDate = new Date(MIN_Y, MIN_M - 1, 1)
+if (defaultMonthDate < minMonthDate) defaultMonthDate.setTime(minMonthDate.getTime())
 const DEFAULT_MONTH = `${defaultMonthDate.getFullYear()}-${String(defaultMonthDate.getMonth() + 1).padStart(2, '0')}`
 
 // 默认查询条件

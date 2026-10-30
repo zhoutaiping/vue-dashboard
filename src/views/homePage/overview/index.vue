@@ -61,6 +61,7 @@
             size="small"
             :clearable="false"
             :append-to-body="false"
+            :picker-options="monthPickerOptions"
             value-format="yyyy-MM"
             placeholder="选择月份"
             style="width: 120px;"
@@ -188,6 +189,7 @@ import {
   OPERATE_METRICS,
   OPERATE_CHART_FIELDS,
   DEFAULT_QUERY,
+  MIN_MONTH,
   ROOT_LEVEL,
   ENERGY_TYPE_KEYS,
   BUILD_FILTERS,
@@ -391,6 +393,16 @@ export default {
         month: this.query.month || '',
         provinceName: this.drillProvinceParam,
         status: this.statusParam
+      }
+    },
+    // 月份选择器禁用项：不允许选择 2024-01 之前的月份
+    monthPickerOptions() {
+      const [y, m] = (MIN_MONTH || '2024-01').split('-').map(Number)
+      const min = new Date(y, m - 1, 1).getTime()
+      return {
+        disabledDate(time) {
+          return time.getTime() < min
+        }
       }
     },
     // 地区排名接口入参：全国 queryNationalRanking / 省内 queryRegionRanking 共用
