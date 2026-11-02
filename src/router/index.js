@@ -92,6 +92,12 @@ export const constantRoutes = [
         component: () => import('@/views/homePage/overview/index'),
         name: 'HomeOverview',
         meta: { title: '首页总览', icon: 'dashboard' }
+      },
+      {
+        path: 'menuManage',
+        component: () => import('@/views/menuManage/index'),
+        name: 'MenuManage',
+        meta: { title: '菜单管理', icon: 'tree' }
       }
     ]
   }
