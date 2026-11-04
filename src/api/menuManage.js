@@ -78,7 +78,7 @@ export function moveMenu(data) {
 /**
  * 生成菜单权限编码建议
  * POST /system/menu/generate-code
- * body: { codePrefix?, level0, menutype, pid }
+ * body: { codePrefix?, level0, meantype, pid }
  */
 export function generateMenuCode(data) {
   return postRequest('/system/menu/generate-code', data)

@@ -28,8 +28,8 @@
       <el-row :gutter="16">
         <!-- 菜单类型：目录 / 页面菜单（均提交 menu）、按钮（button） -->
         <el-col :span="12">
-          <el-form-item label="菜单类型" prop="menutype">
-            <el-select v-model="form.menutype" placeholder="请选择" style="width: 100%">
+          <el-form-item label="菜单类型" prop="meantype">
+            <el-select v-model="form.meantype" placeholder="请选择" style="width: 100%">
               <el-option label="目录" value="directory" />
               <el-option label="菜单" value="menu" />
               <el-option label="按钮" value="button" />
@@ -155,7 +155,7 @@ export default {
     },
     // 按钮类型：字段更少，标签切换成“按钮名称”
     isButtonType() {
-      return this.form.menutype === 'button'
+      return this.menutypeOf(this.form) === 'button'
     },
     // 编辑时禁止把上级选到自己或自己的后代，避免形成环
     editingExcludedIds() {
@@ -182,11 +182,11 @@ export default {
         })
       return [{ value: ROOT_PID, label: '根目录' }, ...map(this.tree)]
     },
-    // 校验规则：接口中 code / name / menutype 必填，menuCode 等其余字段非必填
+    // 校验规则：接口中 code / name / meantype 必填，menuCode 等其余字段非必填
     formRules() {
       const isBtn = this.isButtonType
       return {
-        menutype: [{ required: true, message: '请选择菜单类型', trigger: 'change' }],
+        meantype: [{ required: true, message: '请选择菜单类型', trigger: 'change' }],
         code: [{ required: true, message: isBtn ? '请输入按钮编码' : '请输入权限编码', trigger: 'blur' }],
         name: [{ required: true, message: isBtn ? '请输入按钮名称' : '请输入菜单名称', trigger: 'blur' }]
       }
@@ -198,7 +198,7 @@ export default {
       if (val) this.init()
     },
     // 切换菜单类型会改变可见字段与校验规则，新增时还要重新生成权限编码
-    'form.menutype'() {
+    'form.meantype'() {
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
       this.refreshCode()
     },
@@ -218,13 +218,17 @@ export default {
         menuCode: '',
         description: '',
         // 展示值：directory 目录 / menu 菜单 / button 按钮，提交时统一映射为 menu|button
-        menutype: 'directory',
+        meantype: 'directory',
         icon: '',
         url: '',
         level0: 1,
         orderNum: 99,
         regular: 1
       }
+    },
+    // 真实接口字段是 meantype（文档/报错文案误写成 menutype），这里兼容两种写法
+    menutypeOf(row) {
+      return (row && (row.meantype || row.menutype)) || 'menu'
     },
     findNode(list, id) {
       for (let i = 0; i < (list || []).length; i += 1) {
@@ -261,7 +265,7 @@ export default {
           name: row.name || '',
           menuCode: row.menuCode || '',
           description: row.description || '',
-          menutype: row.menutype === 'button' ? 'button' : ((row.children || []).length ? 'directory' : 'menu'),
+          meantype: this.menutypeOf(row) === 'button' ? 'button' : ((row.children || []).length ? 'directory' : 'menu'),
           icon: row.icon || '',
           url: row.url || '',
           level0: Number(row.level0) || 1,
@@ -285,7 +289,7 @@ export default {
           name: detail.name || '',
           menuCode: detail.menuCode || '',
           description: detail.description || '',
-          menutype: detail.menutype === 'button' ? 'button' : ((detail.children || []).length ? 'directory' : 'menu'),
+          meantype: this.menutypeOf(detail) === 'button' ? 'button' : ((detail.children || []).length ? 'directory' : 'menu'),
           icon: detail.icon || '',
           url: detail.url || '',
           level0: Number(detail.level0) || 1,
@@ -303,14 +307,14 @@ export default {
     },
     /**
      * 新增时自动生成权限编码：POST /system/menu/generate-code
-     * body 只有文档里的 4 个字段：{ pid, level0, menutype, codePrefix? }
+     * body 只有文档里的 4 个字段：{ pid, level0, meantype, codePrefix? }
      * 上级菜单 + 菜单类型变化都会重新取一次建议值（相同参数不重复请求）
      */
     async refreshCode() {
       if (this.mode === 'edit') return
       const pid = this.form.pid === ROOT_PID ? 0 : Number(this.form.pid) || 0
-      const menutype = this.form.menutype === 'button' ? 'button' : 'menu'
-      const key = `${pid}|${menutype}`
+      const meantype = this.menutypeOf(this.form) === 'button' ? 'button' : 'menu'
+      const key = `${pid}|${meantype}`
       if (key === this.lastCodeKey) return
       this.lastCodeKey = key
 
@@ -319,7 +323,7 @@ export default {
       const res = await generateMenuCode({
         pid,
         level0: this.levelOf(pid),
-        menutype
+        meantype
       })
       // 只采纳最后一次请求的结果
       if (seq !== this.codeSeq) return
@@ -340,13 +344,13 @@ export default {
         this.saving = true
         const pid = this.form.pid === ROOT_PID ? 0 : Number(this.form.pid) || 0
         // 目录/页面菜单都提交 menu，按钮提交 button；该字段必填，永远不给空值
-        const menutype = this.form.menutype === 'button' ? 'button' : 'menu'
+        const meantype = this.menutypeOf(this.form) === 'button' ? 'button' : 'menu'
         // 严格按文档的 MenuSaveDTO 提交：parentCode / level0 由后端自动维护与计算，这里不再重复传
         const payload = {
           code: String(this.form.code || '').trim(),
           description: this.form.description || '',
           icon: this.isButtonType ? '' : this.form.icon || '',
-          menutype,
+          meantype,
           menuCode: this.form.menuCode || '',
           name: String(this.form.name || '').trim(),
           orderNum: Number(this.form.orderNum) || 1,

@@ -22,12 +22,10 @@
     <!-- 树形菜单表格：row-key=id + tree-props children 构成层级，展开箭头在第一列 -->
     <el-table
       ref="table"
-      :key="tableKey"
       v-loading="loading"
       :data="tableData"
       row-key="id"
       :tree-props="{ children: 'children' }"
-      :default-expand-all="expandAll || !!keyword"
       :height="tableHeight"
       class="menu-manage__table"
       element-loading-text="加载中..."
@@ -60,7 +58,7 @@
 
       <el-table-column label="菜单类型" width="90" align="center">
         <template slot-scope="{ row }">
-          <el-tag size="mini" effect="plain" :type="menutypeTag(row)">{{ menutypeText(row) }}</el-tag>
+          <el-tag size="mini" effect="plain" :type="meantypeTag(row)">{{ meantypeText(row) }}</el-tag>
         </template>
       </el-table-column>
 
@@ -141,9 +139,8 @@ export default {
       // 接口原始树（不随搜索变化），排序/编辑/删除都以它为准
       rawList: [],
       totalCount: 0,
-      // 全部展开状态：切换时重建表格（default-expand-all 只在初始化生效）
+      // 全部展开状态（配合 applyExpandAll 逐行同步）
       expandAll: false,
-      tableKey: 0,
       tableHeight: 560,
       expandedOnce: false,
       // 新增 / 编辑抽屉状态（表单逻辑在 MenuFormDrawer 组件内）
@@ -160,9 +157,10 @@ export default {
     }
   },
   watch: {
-    // 过滤后行对象重建，逐行维护的展开状态会错位，直接重建表格（搜索时默认全展开）
-    keyword() {
-      this.tableKey += 1
+    // 搜索时自动展开命中分支，并让按钮状态与实际展开保持一致；清空后按用户选择恢复
+    keyword(val) {
+      if (val) this.expandAll = true
+      this.$nextTick(this.applyExpandAll)
     }
   },
   mounted() {
@@ -184,18 +182,22 @@ export default {
       if (!icon) return ''
       return ICON_MAP[icon] || 'el-icon-menu'
     },
-    // menutype 只有 menu / button；menu 再按是否有子级区分目录与页面菜单
-    menutypeText(row) {
-      if (row.menutype === 'button') return '按钮'
+    // 真实接口字段是 meantype（文档/报错文案误写成 menutype），这里兼容两种写法
+    menutypeOf(row) {
+      return (row && (row.meantype || row.menutype)) || 'menu'
+    },
+    // meantype 只有 menu / button；menu 再按是否有子级区分目录与页面菜单
+    meantypeText(row) {
+      if (this.menutypeOf(row) === 'button') return '按钮'
       return (row.children || []).length ? '目录' : '菜单'
     },
-    menutypeTag(row) {
-      if (row.menutype === 'button') return 'warning'
+    meantypeTag(row) {
+      if (this.menutypeOf(row) === 'button') return 'warning'
       return (row.children || []).length ? '' : 'success'
     },
-    // regular：0 锁定不可移动，1 可移动
+    // regular：0 锁定不可移动；接口可能返回 null / 缺省，此时视为可移动
     isLocked(row) {
-      return Number(row.regular) === 0
+      return row.regular === 0 || row.regular === '0'
     },
     updateTableHeight() {
       // 视口 - 顶栏(50) - tags-view(34) - 页面内边距(32) - 工具栏(44) - 余量(12)
@@ -219,6 +221,9 @@ export default {
         if (!this.expandedOnce) {
           this.expandedOnce = true
           this.expandFirstParent()
+        } else {
+          // 数据刷新后 el-table 会重置展开态，按当前状态恢复
+          this.applyExpandAll()
         }
       })
     },
@@ -244,9 +249,25 @@ export default {
       const first = this.tableData.find(item => (item.children || []).length)
       if (first) this.$refs.table.toggleRowExpansion(first, true)
     },
+    /**
+     * 逐行同步展开状态
+     * 不用 default-expand-all：它只在表格初始化/重建时生效，
+     * 数据刷新、搜索过滤后都会失效，导致「全部收起」点了没反应
+     */
+    applyExpandAll() {
+      const table = this.$refs.table
+      if (!table) return
+      const walk = list => (list || []).forEach(row => {
+        if ((row.children || []).length) {
+          table.toggleRowExpansion(row, this.expandAll)
+        }
+        walk(row.children)
+      })
+      walk(this.tableData)
+    },
     toggleExpandAll() {
       this.expandAll = !this.expandAll
-      this.tableKey += 1
+      this.$nextTick(this.applyExpandAll)
     },
     // 同级列表（排序按钮的禁用判断依赖它）
     siblingsOf(row) {
