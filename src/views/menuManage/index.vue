@@ -7,7 +7,7 @@
           v-model="keyword"
           size="small"
           clearable
-          placeholder="请输入菜单名称 / 编码 / 权限标识"
+          placeholder="请输入菜单名称 / 权限编码 / 前端菜单编码"
           prefix-icon="el-icon-search"
           class="menu-manage__search"
         />
@@ -19,14 +19,14 @@
       <span class="menu-manage__count">共 {{ totalCount }} 项</span>
     </div>
 
-    <!-- 树形菜单表格：row-key + childList 构成层级，展开箭头在第一列 -->
+    <!-- 树形菜单表格：row-key=id + tree-props children 构成层级，展开箭头在第一列 -->
     <el-table
       ref="table"
       :key="tableKey"
       v-loading="loading"
       :data="tableData"
-      row-key="menuId"
-      :tree-props="{ children: 'childList' }"
+      row-key="id"
+      :tree-props="{ children: 'children' }"
       :default-expand-all="expandAll || !!keyword"
       :height="tableHeight"
       class="menu-manage__table"
@@ -54,15 +54,13 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="menuCode" label="权限标识" min-width="240" show-overflow-tooltip />
+      <el-table-column prop="code" label="权限编码" min-width="150" show-overflow-tooltip />
 
-      <el-table-column prop="menuId" label="菜单编码" width="100" align="center" />
+      <el-table-column prop="menuCode" label="前端菜单编码" min-width="250" show-overflow-tooltip />
 
-      <el-table-column label="是否显示" width="90" align="center">
+      <el-table-column label="菜单类型" width="90" align="center">
         <template slot-scope="{ row }">
-          <span :class="['menu-status', String(row.isOn) === '1' ? 'is-on' : 'is-off']">
-            {{ String(row.isOn) === '1' ? '显示' : '隐藏' }}
-          </span>
+          <el-tag size="mini" effect="plain" :type="menutypeTag(row)">{{ menutypeText(row) }}</el-tag>
         </template>
       </el-table-column>
 
@@ -71,8 +69,6 @@
           <span class="menu-url">{{ row.url || '--' }}</span>
         </template>
       </el-table-column>
-
-      <el-table-column prop="modifyTime" label="更新时间" width="170" align="center" />
 
       <el-table-column label="排序操作" width="186" align="center" fixed="right">
         <template slot-scope="{ row }">
@@ -106,100 +102,21 @@
       </el-table-column>
     </el-table>
 
-    <!-- 新增 / 编辑弹窗 -->
-    <el-dialog
-      :visible.sync="dialogVisible"
-      :title="dialogTitle"
-      width="640px"
-      append-to-body
-      custom-class="menu-manage-dialog"
-      :close-on-click-modal="false"
-    >
-      <el-form ref="form" :model="form" :rules="rules" label-width="96px" size="small">
-        <el-row :gutter="12">
-          <el-col :span="24">
-            <el-form-item label="上级菜单">
-              <span class="parent-text">{{ parentName }}</span>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item label="菜单类型">
-              <el-radio-group v-model="form.type">
-                <el-radio :label="0">目录</el-radio>
-                <el-radio :label="1">菜单</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="菜单名称" prop="name">
-              <el-input v-model="form.name" maxlength="30" placeholder="请输入菜单名称" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="菜单编码">
-              <el-input v-model="form.menuId" disabled placeholder="保存后自动生成" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item label="权限标识" prop="menuCode">
-              <el-input v-model="form.menuCode" maxlength="80" placeholder="如 GanSu/MarketDashboard" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="图标">
-              <el-input v-model="form.icon" placeholder="如 icon-shouye">
-                <i v-if="iconClass(form.icon)" slot="suffix" :class="iconClass(form.icon)" class="icon-preview" />
-              </el-input>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="排序号">
-              <el-input-number v-model="form.orderNum" :min="1" :max="9999" controls-position="right" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item label="路由地址">
-              <el-input v-model="form.url" maxlength="200" placeholder="如 views/GanSu/Home/index.vue" />
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="是否显示">
-              <el-radio-group v-model="form.isOn">
-                <el-radio label="1">显示</el-radio>
-                <el-radio label="0">隐藏</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item label="是否缓存">
-              <el-radio-group v-model="form.keepAlive">
-                <el-radio label="1">缓存</el-radio>
-                <el-radio label="0">不缓存</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-
-      <div slot="footer">
-        <el-button size="small" @click="dialogVisible = false">取 消</el-button>
-        <el-button size="small" type="primary" :loading="saving" @click="handleSubmit">确 定</el-button>
-      </div>
-    </el-dialog>
+    <!-- 新增 / 编辑抽屉：表单独立组件，保存成功后刷新列表 -->
+    <menu-form-drawer
+      :visible.sync="drawerVisible"
+      :mode="drawerMode"
+      :row="editingRow"
+      :pid="drawerPid"
+      :tree="rawList"
+      @saved="fetchList"
+    />
   </div>
 </template>
 
 <script>
-import { qryMenuList, saveMenu, deleteMenu, sortMenu } from '@/api/menuManage'
+import { qryMenuList, deleteMenu, moveMenu } from '@/api/menuManage'
+import MenuFormDrawer from './components/MenuFormDrawer'
 
 // 接口返回的是项目自定义 iconfont 名，这里映射成视觉近似的 Element 图标；
 // 以后接入真实图标库时，只需把这里换成 <svg-icon :icon-class="row.icon">
@@ -216,10 +133,10 @@ const ICON_MAP = {
 
 export default {
   name: 'MenuManage',
+  components: { MenuFormDrawer },
   data() {
     return {
       loading: false,
-      saving: false,
       keyword: '',
       // 接口原始树（不随搜索变化），排序/编辑/删除都以它为准
       rawList: [],
@@ -229,26 +146,17 @@ export default {
       tableKey: 0,
       tableHeight: 560,
       expandedOnce: false,
-      dialogVisible: false,
-      // add 新增顶级 / addChild 新增下级 / edit 编辑
-      dialogMode: 'add',
-      parentName: '顶级菜单',
-      form: this.emptyForm(),
-      rules: {
-        name: [{ required: true, message: '请输入菜单名称', trigger: 'blur' }],
-        menuCode: [{ required: true, message: '请输入权限标识', trigger: 'blur' }]
-      }
+      // 新增 / 编辑抽屉状态（表单逻辑在 MenuFormDrawer 组件内）
+      drawerVisible: false,
+      drawerMode: 'add', // add 新增顶级 / addChild 新增下级 / edit 编辑
+      editingRow: null,
+      drawerPid: 0
     }
   },
   computed: {
     // 搜索过滤：命中节点保留全部子级，未命中但有命中子级的只保留命中的分支
     tableData() {
       return this.filterTree(this.rawList, this.keyword)
-    },
-    dialogTitle() {
-      if (this.dialogMode === 'edit') return '编辑菜单'
-      if (this.dialogMode === 'addChild') return '新增下级菜单'
-      return '新增菜单'
     }
   },
   watch: {
@@ -268,20 +176,6 @@ export default {
     window.removeEventListener('resize', this.updateTableHeight)
   },
   methods: {
-    emptyForm() {
-      return {
-        menuId: '',
-        parentId: '0',
-        name: '',
-        menuCode: '',
-        icon: '',
-        url: '',
-        type: 0,
-        isOn: '1',
-        keepAlive: '1',
-        orderNum: 99
-      }
-    },
     // 后端成功码：0（本项目约定）/ 200（历史接口）
     isOk(res) {
       return !!res && (res.code === 0 || res.code === 200)
@@ -289,6 +183,19 @@ export default {
     iconClass(icon) {
       if (!icon) return ''
       return ICON_MAP[icon] || 'el-icon-menu'
+    },
+    // menutype 只有 menu / button；menu 再按是否有子级区分目录与页面菜单
+    menutypeText(row) {
+      if (row.menutype === 'button') return '按钮'
+      return (row.children || []).length ? '目录' : '菜单'
+    },
+    menutypeTag(row) {
+      if (row.menutype === 'button') return 'warning'
+      return (row.children || []).length ? '' : 'success'
+    },
+    // regular：0 锁定不可移动，1 可移动
+    isLocked(row) {
+      return Number(row.regular) === 0
     },
     updateTableHeight() {
       // 视口 - 顶栏(50) - tags-view(34) - 页面内边距(32) - 工具栏(44) - 余量(12)
@@ -316,17 +223,17 @@ export default {
       })
     },
     countTree(list) {
-      return (list || []).reduce((sum, item) => sum + 1 + this.countTree(item.childList), 0)
+      return (list || []).reduce((sum, item) => sum + 1 + this.countTree(item.children), 0)
     },
     filterTree(list, keyword) {
       const kw = String(keyword || '').trim().toLowerCase()
       if (!kw) return list || []
       const result = []
       ;(list || []).forEach(node => {
-        const hit = [node.name, node.menuId, node.menuCode, node.url].some(val => String(val || '').toLowerCase().indexOf(kw) > -1)
-        const children = hit ? (node.childList || []) : this.filterTree(node.childList, keyword)
+        const hit = [node.name, node.code, node.menuCode, node.url].some(val => String(val || '').toLowerCase().indexOf(kw) > -1)
+        const children = hit ? (node.children || []) : this.filterTree(node.children, keyword)
         if (hit || children.length) {
-          result.push(Object.assign({}, node, { childList: children }))
+          result.push(Object.assign({}, node, { children }))
         }
       })
       return result
@@ -334,7 +241,7 @@ export default {
     // 首屏展开第一个有子级的目录，避免整页全是折叠行
     expandFirstParent() {
       if (this.expandAll || this.keyword || !this.$refs.table) return
-      const first = this.tableData.find(item => (item.childList || []).length)
+      const first = this.tableData.find(item => (item.children || []).length)
       if (first) this.$refs.table.toggleRowExpansion(first, true)
     },
     toggleExpandAll() {
@@ -343,39 +250,45 @@ export default {
     },
     // 同级列表（排序按钮的禁用判断依赖它）
     siblingsOf(row) {
-      const find = (list, parentId) => {
-        if (parentId === '0') return list
+      const find = (list, pid) => {
+        if (!Number(pid)) return list
         for (let i = 0; i < (list || []).length; i += 1) {
           const node = list[i]
-          if (node.menuId === parentId) return node.childList || []
-          const hit = find(node.childList, parentId)
+          if (node.id === Number(pid)) return node.children || []
+          const hit = find(node.children, pid)
           if (hit) return hit
         }
         return null
       }
-      return find(this.rawList, row.parentId) || []
+      return find(this.rawList, row.pid) || []
     },
     siblingIndex(row) {
-      return this.siblingsOf(row).findIndex(item => item.menuId === row.menuId)
+      return this.siblingsOf(row).findIndex(item => item.id === row.id)
     },
+    // 首/尾或锁定（regular=0）都不可移动
     isFirstSibling(row) {
-      return this.siblingIndex(row) <= 0
+      return this.isLocked(row) || this.siblingIndex(row) <= 0
     },
     isLastSibling(row) {
       const list = this.siblingsOf(row)
-      return this.siblingIndex(row) >= list.length - 1
+      return this.isLocked(row) || this.siblingIndex(row) >= list.length - 1
     },
-    findNode(list, menuId) {
+    findNode(list, id) {
       for (let i = 0; i < (list || []).length; i += 1) {
         const node = list[i]
-        if (node.menuId === menuId) return node
-        const hit = this.findNode(node.childList, menuId)
+        if (node.id === Number(id)) return node
+        const hit = this.findNode(node.children, id)
         if (hit) return hit
       }
       return null
     },
     async handleMove(row, direction) {
-      const res = await sortMenu({ menuId: row.menuId, direction })
+      if (this.isLocked(row)) {
+        this.$message.warning('该菜单已锁定，不可移动')
+        return
+      }
+      // 接口约定 direction 为 UP / DOWN
+      const res = await moveMenu({ id: row.id, direction: String(direction).toUpperCase() })
       if (!this.isOk(res)) {
         this.$message.error((res && res.msg) || '排序失败')
         return
@@ -383,64 +296,30 @@ export default {
       this.$message.success('排序成功')
       this.fetchList()
     },
+    // 打开抽屉：表单细节（详情回填 / 自动编码 / 校验）都在 MenuFormDrawer 内处理
     handleAddTop() {
-      this.openDialog({ mode: 'add', parentId: '0', parentName: '顶级菜单' })
+      this.drawerMode = 'add'
+      this.editingRow = null
+      this.drawerPid = 0
+      this.drawerVisible = true
     },
     handleAddChild(row) {
-      this.openDialog({ mode: 'addChild', parentId: row.menuId, parentName: row.name })
+      this.drawerMode = 'addChild'
+      this.editingRow = null
+      this.drawerPid = row.id
+      this.drawerVisible = true
     },
     handleEdit(row) {
-      const parent = row.parentId === '0' ? null : this.findNode(this.rawList, row.parentId)
-      this.openDialog({
-        mode: 'edit',
-        parentId: row.parentId || '0',
-        parentName: parent ? parent.name : '顶级菜单',
-        row
-      })
-    },
-    openDialog({ mode = 'add', parentId, parentName, row }) {
-      this.dialogMode = mode
-      this.parentName = parentName || '顶级菜单'
-      if (mode === 'edit' && row) {
-        this.form = {
-          menuId: row.menuId,
-          parentId: row.parentId || '0',
-          name: row.name || '',
-          menuCode: row.menuCode || '',
-          icon: row.icon || '',
-          url: row.url || '',
-          type: Number(row.type) || 0,
-          isOn: String(row.isOn) === '0' ? '0' : '1',
-          keepAlive: String(row.keepAlive) === '0' ? '0' : '1',
-          orderNum: Number(row.orderNum) || 1
-        }
-      } else {
-        this.form = Object.assign(this.emptyForm(), { parentId: parentId || '0' })
-      }
-      this.dialogVisible = true
-      this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
-    },
-    handleSubmit() {
-      this.$refs.form.validate(async valid => {
-        if (!valid) return
-        this.saving = true
-        const res = await saveMenu(Object.assign({}, this.form))
-        this.saving = false
-        if (!this.isOk(res)) {
-          this.$message.error((res && res.msg) || '保存失败')
-          return
-        }
-        this.dialogVisible = false
-        this.$message.success(this.dialogMode === 'edit' ? '修改成功' : '新增成功')
-        this.fetchList()
-      })
+      this.drawerMode = 'edit'
+      this.editingRow = row
+      this.drawerPid = 0
+      this.drawerVisible = true
     },
     handleDelete(row) {
-      if ((row.childList || []).length) {
-        this.$message.warning('存在下级菜单，请先删除下级菜单')
-        return
-      }
-      this.$confirm(`确认删除菜单「${row.name}」吗？`, '提示', {
+      // 接口语义：删除节点时其全部子节点一并删除
+      const childCount = this.countTree(row.children)
+      const tip = childCount > 0 ? `，其下 ${childCount} 个子节点也将一并删除` : ''
+      this.$confirm(`确认删除菜单「${row.name}」吗？${tip}`, '提示', {
         type: 'warning',
         confirmButtonText: '确定',
         cancelButtonText: '取消'
@@ -449,7 +328,7 @@ export default {
         .catch(() => {})
     },
     async doDelete(row) {
-      const res = await deleteMenu({ menuId: row.menuId })
+      const res = await deleteMenu(row.id)
       if (!this.isOk(res)) {
         this.$message.error((res && res.msg) || '删除失败')
         return
@@ -539,18 +418,6 @@ $menu-expand-gap: 3px;
   }
 }
 
-.menu-status {
-  font-size: 12px;
-
-  &.is-on {
-    color: #67c23a;
-  }
-
-  &.is-off {
-    color: #f56c6c;
-  }
-}
-
 .menu-url {
   color: #606266;
   font-size: 12px;
@@ -628,17 +495,5 @@ $menu-expand-gap: 3px;
   }
 }
 
-.icon-preview {
-  font-size: 14px;
-  color: #0088ff;
-  line-height: 30px;
-  margin-right: 6px;
-}
-
-.parent-text {
-  color: #303133;
-}
 </style>
-
-<!-- 弹窗使用系统默认浅色外观（append-to-body 已脱离组件作用域），无需额外样式 -->
 
