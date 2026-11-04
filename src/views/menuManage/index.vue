@@ -176,7 +176,7 @@ export default {
   methods: {
     // 后端成功码：0（本项目约定）/ 200（历史接口）
     isOk(res) {
-      return !!res && (res.code === 0 || res.code === 200)
+      return !!res && (res.code === 1 || res.code === 200)
     },
     iconClass(icon) {
       if (!icon) return ''
@@ -250,20 +250,31 @@ export default {
       if (first) this.$refs.table.toggleRowExpansion(first, true)
     },
     /**
-     * 逐行同步展开状态
+     * 逐行同步展开状态（全部展开 / 全部收起）
      * 不用 default-expand-all：它只在表格初始化/重建时生效，
      * 数据刷新、搜索过滤后都会失效，导致「全部收起」点了没反应
+     *
+     * 先走官方 toggleRowExpansion，再回写 store.states.treeData[id].expanded 兜底：
+     * 展开态在 element-ui 里就是这个字段，任何 2.x 版本都生效，
+     * 避免个别版本/封装下 toggleRowExpansion 不落库导致收起没反应
      */
     applyExpandAll() {
       const table = this.$refs.table
-      if (!table) return
+      if (!table || !table.store) return
+      const expand = !!this.expandAll
+      const treeData = (table.store.states && table.store.states.treeData) || {}
+
       const walk = list => (list || []).forEach(row => {
         if ((row.children || []).length) {
-          table.toggleRowExpansion(row, this.expandAll)
+          table.toggleRowExpansion(row, expand)
+          const node = treeData[row.id]
+          if (node && node.expanded !== expand) node.expanded = expand
         }
         walk(row.children)
       })
       walk(this.tableData)
+
+      if (table.store.updateTableScrollY) table.store.updateTableScrollY()
     },
     toggleExpandAll() {
       this.expandAll = !this.expandAll
@@ -339,13 +350,14 @@ export default {
     handleDelete(row) {
       // 接口语义：删除节点时其全部子节点一并删除
       const childCount = this.countTree(row.children)
+      const that = this
       const tip = childCount > 0 ? `，其下 ${childCount} 个子节点也将一并删除` : ''
       this.$confirm(`确认删除菜单「${row.name}」吗？${tip}`, '提示', {
         type: 'warning',
         confirmButtonText: '确定',
         cancelButtonText: '取消'
       })
-        .then(() => this.doDelete(row))
+        .then(() => that.doDelete(row))
         .catch(() => {})
     },
     async doDelete(row) {
