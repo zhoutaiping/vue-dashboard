@@ -15,6 +15,8 @@
  *   icon       菜单图标
  *   url        前端页面组件路径
  *   level      菜单层级：1 一级菜单，2 二级菜单，3 三级菜单
+ *   cacheFlag  是否缓存：0 缓存，1 不缓存（仅目录/页面菜单，按钮类型不带）
+ *   sidebarShow 是否在左侧栏显示：0 显示，1 不显示（仅目录/页面菜单，按钮类型不带）
  *   orderNum   菜单排序号
  *   regular    锁定标志：0 锁定（不可移动），1 可移动
  *   deleteFlag 删除标志：0 正常，1 已删除
@@ -399,15 +401,25 @@ function toDTO(node) {
     url: node.url || '',
     level0: Number(node.level0 || node.level) || 1,
     orderNum: Number(node.orderNum) || 0,
+    // 0/1 标志位：历史数据缺省按 0（缓存 / 显示）处理
+    cacheFlag: node.cacheFlag === 1 ? 1 : 0,
+    sidebarShow: node.sidebarShow === 1 ? 1 : 0,
     regular: Number(node.regular) === 0 ? 0 : 1,
     deleteFlag: Number(node.deleteFlag) || 0,
     children
   }
 }
 
+// 标志位取 0/1；未传（按钮类型）返回 undefined，编辑时保留原值
+function flagOf(value) {
+  if (value === 0 || value === 1) return value
+  if (value === '0' || value === '1') return Number(value)
+  return undefined
+}
+
 // 请求体 → 接口 DTO（忽略非接口字段）
 function pickDTO(body) {
-  return {
+  const dto = {
     code: String(body.code || '').trim(),
     description: String(body.description || ''),
     icon: body.icon ? String(body.icon) : '',
@@ -418,6 +430,11 @@ function pickDTO(body) {
     pid: Number(body.pid) || 0,
     url: String(body.url || '')
   }
+  const cacheFlag = flagOf(body.cacheFlag)
+  if (cacheFlag !== undefined) dto.cacheFlag = cacheFlag
+  const sidebarShow = flagOf(body.sidebarShow)
+  if (sidebarShow !== undefined) dto.sidebarShow = sidebarShow
+  return dto
 }
 
 // 同级数组：pid 为 0 时返回顶层
@@ -638,6 +655,9 @@ module.exports = [
         level: parent ? Number(parent.level0 || parent.level) + 1 : 1,
         level0: parent ? Number(parent.level0 || parent.level) + 1 : 1,
         orderNum: dto.orderNum || siblings.length + 1,
+        // 按钮类型不传这两个字段，按接口默认 0 落库
+        cacheFlag: dto.cacheFlag === undefined ? 0 : dto.cacheFlag,
+        sidebarShow: dto.sidebarShow === undefined ? 0 : dto.sidebarShow,
         regular: 1,
         deleteFlag: 0,
         children: []
@@ -679,6 +699,9 @@ module.exports = [
       node.icon = dto.icon || null
       node.url = dto.url
       if (dto.orderNum) node.orderNum = dto.orderNum
+      // 按钮类型不传标志位时保留原值，不误清
+      if (dto.cacheFlag !== undefined) node.cacheFlag = dto.cacheFlag
+      if (dto.sidebarShow !== undefined) node.sidebarShow = dto.sidebarShow
       return ok(toDTO(node), '修改成功')
     }
   },

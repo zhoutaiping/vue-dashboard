@@ -98,6 +98,26 @@
             <el-input v-model="form.url" maxlength="200" placeholder="如 views/GanSu/Home/index.vue" />
           </el-form-item>
         </el-col>
+
+        <!-- 仅目录 / 页面菜单：sidebarShow 是否在左侧栏显示（0 显示，1 不显示） -->
+        <el-col v-if="!isButtonType" :span="12">
+          <el-form-item label="是否显示" prop="sidebarShow">
+            <el-select v-model="form.sidebarShow" placeholder="请选择" style="width: 100%">
+              <el-option label="显示" :value="0" />
+              <el-option label="不显示" :value="1" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+
+        <!-- 仅目录 / 页面菜单：cacheFlag 是否缓存（0 缓存，1 不缓存） -->
+        <el-col v-if="!isButtonType" :span="12">
+          <el-form-item label="是否缓存" prop="cacheFlag">
+            <el-select v-model="form.cacheFlag" placeholder="请选择" style="width: 100%">
+              <el-option label="缓存" :value="0" />
+              <el-option label="不缓存" :value="1" />
+            </el-select>
+          </el-form-item>
+        </el-col>
       </el-row>
     </el-form>
   </el-drawer>
@@ -182,14 +202,19 @@ export default {
         })
       return [{ value: ROOT_PID, label: '根目录' }, ...map(this.tree)]
     },
-    // 校验规则：接口中 code / name / meantype 必填，menuCode 等其余字段非必填
+    // 校验规则：code / name / meantype 必填；目录与菜单还要求选择显示、缓存标志
     formRules() {
       const isBtn = this.isButtonType
-      return {
+      const rules = {
         meantype: [{ required: true, message: '请选择菜单类型', trigger: 'change' }],
         code: [{ required: true, message: isBtn ? '请输入按钮编码' : '请输入权限编码', trigger: 'blur' }],
         name: [{ required: true, message: isBtn ? '请输入按钮名称' : '请输入菜单名称', trigger: 'blur' }]
       }
+      if (!isBtn) {
+        rules.sidebarShow = [{ required: true, message: '请选择是否显示', trigger: 'change' }]
+        rules.cacheFlag = [{ required: true, message: '请选择是否缓存', trigger: 'change' }]
+      }
+      return rules
     }
   },
   watch: {
@@ -223,8 +248,17 @@ export default {
         url: '',
         level0: 1,
         orderNum: 99,
+        // 接口 int32：sidebarShow 0 显示 / 1 不显示，cacheFlag 0 缓存 / 1 不缓存
+        // 新增留空，强制用户选择；按钮类型不提交这两个字段
+        sidebarShow: '',
+        cacheFlag: '',
         regular: 1
       }
+    },
+    // 标志位兼容后端返回 0/1 数字或字符串；缺省返回 fallback（新增为 '' 强制选择，编辑为 0）
+    flagOf(value, fallback) {
+      if (value === 0 || value === 1 || value === '0' || value === '1') return Number(value)
+      return fallback === undefined ? '' : fallback
     },
     // 真实接口字段是 meantype（文档/报错文案误写成 menutype），这里兼容两种写法
     menutypeOf(row) {
@@ -269,7 +303,9 @@ export default {
           icon: row.icon || '',
           url: row.url || '',
           level0: Number(row.level0) || 1,
-          orderNum: Number(row.orderNum) || 1
+          orderNum: Number(row.orderNum) || 1,
+          sidebarShow: this.flagOf(row.sidebarShow, 0),
+          cacheFlag: this.flagOf(row.cacheFlag, 0)
         })
         this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
 
@@ -294,6 +330,9 @@ export default {
           url: detail.url || '',
           level0: Number(detail.level0) || 1,
           orderNum: Number(detail.orderNum) || 1,
+          // 详情接口为准：0/1 都要正确回显（0 不能被 || 吞掉）
+          sidebarShow: this.flagOf(detail.sidebarShow, 0),
+          cacheFlag: this.flagOf(detail.cacheFlag, 0),
           regular: Number(detail.regular) === 0 ? 0 : 1
         })
         this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
@@ -356,6 +395,11 @@ export default {
           orderNum: Number(this.form.orderNum) || 1,
           pid,
           url: this.isButtonType ? '' : this.form.url || ''
+        }
+        // 目录 / 页面菜单才提交这两个 int32 标志位；按钮类型不需要
+        if (!this.isButtonType) {
+          payload.sidebarShow = Number(this.form.sidebarShow)
+          payload.cacheFlag = Number(this.form.cacheFlag)
         }
         const isEdit = this.mode === 'edit'
         const res = isEdit ? await updateMenu(this.form.id, payload) : await saveMenu(payload)

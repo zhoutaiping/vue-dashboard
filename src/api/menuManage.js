@@ -46,6 +46,7 @@ export function getMenuInfo(id) {
 /**
  * 新增：目录、菜单、按钮
  * POST /system/menu/save
+ * 目录/页面菜单额外带 sidebarShow(0 显示/1 不显示)、cacheFlag(0 缓存/1 不缓存)，按钮类型不带
  */
 export function saveMenu(data) {
   return postRequest('/system/menu/save', data)
