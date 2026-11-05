@@ -83,7 +83,27 @@
 
         <el-col v-if="!isButtonType" :span="12">
           <el-form-item label="菜单图标">
-            <el-input v-model="form.icon" suffix-icon="el-icon-search" placeholder="请输入" />
+            <!-- 下拉展示 svg 图标 + 名称，选中后输入框只显示图标名（:label） -->
+            <el-select
+              v-model="form.icon"
+              filterable
+              clearable
+              placeholder="请选择图标"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="name in iconOptions"
+                :key="name"
+                :label="name"
+                :value="name"
+              >
+                <span class="menu-icon-option">
+                  <Icon v-if="iconExists(name)" :name="name" class="menu-icon-option__svg" />
+                  <i v-else :class="legacyIconClass(name)" class="menu-icon-option__legacy" />
+                  <span class="menu-icon-option__name">{{ name }}</span>
+                </span>
+              </el-option>
+            </el-select>
           </el-form-item>
         </el-col>
 
@@ -125,6 +145,7 @@
 
 <script>
 import { getMenuInfo, saveMenu, updateMenu, generateMenuCode } from '@/api/menuManage'
+import { menuIconNames, iconExists as hasIcon, legacyIconClass as legacyIcon } from '@/icons/menuIcons'
 
 // 上级菜单“根目录”的哨兵值：element-ui 的 cascader 把 0 当作空值，无法回显
 const ROOT_PID = -1
@@ -176,6 +197,12 @@ export default {
     // 按钮类型：字段更少，标签切换成“按钮名称”
     isButtonType() {
       return this.menutypeOf(this.form) === 'button'
+    },
+    // 图标下拉选项来自 src/icons 下的 svg 文件；历史数据的旧值也补一项以便编辑回显
+    iconOptions() {
+      const list = menuIconNames.slice()
+      if (this.form.icon && list.indexOf(this.form.icon) === -1) list.unshift(this.form.icon)
+      return list
     },
     // 编辑时禁止把上级选到自己或自己的后代，避免形成环
     editingExcludedIds() {
@@ -233,6 +260,13 @@ export default {
     }
   },
   methods: {
+    iconExists(name) {
+      return hasIcon(name)
+    },
+    // 历史 iconfont 值不是 svg symbol，下拉里用近似的 Element 图标兜底
+    legacyIconClass(name) {
+      return legacyIcon(name)
+    },
     emptyForm() {
       return {
         id: '',
@@ -462,6 +496,33 @@ export default {
   .drawer-form .el-form-item__label {
     padding-bottom: 4px;
     line-height: 20px;
+    color: #606266;
+  }
+}
+
+/* 图标下拉选项：面板 append-to-body，样式放全局 */
+.menu-icon-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &__svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    color: #0088ff;
+  }
+
+  &__legacy {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    font-size: 16px;
+    line-height: 1;
+    color: #0088ff;
+  }
+
+  &__name {
     color: #606266;
   }
 }

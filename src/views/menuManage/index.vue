@@ -1,6 +1,6 @@
 <template>
   <div class="menu-manage">
-    <!-- 工具栏：搜索 / 新增 / 全部展开收起 -->
+    <!-- 工具栏：搜索 / 新增 / 全部展开收起 / 数据修复 -->
     <div class="menu-manage__toolbar">
       <div class="menu-manage__toolbar-left">
         <el-input
@@ -14,6 +14,15 @@
         <el-button size="small" type="primary" icon="el-icon-plus" @click="handleAddTop">新增</el-button>
         <el-button size="small" class="menu-manage__ghost-btn" @click="toggleExpandAll">
           {{ expandAll ? '全部收起' : '全部展开' }}
+        </el-button>
+        <!-- 一次性数据修复：仅点击按钮才触发，进入页面不执行 -->
+        <el-button
+          size="small"
+          class="menu-manage__ghost-btn"
+          icon="el-icon-edit-outline"
+          @click="handleFixMenuCode"
+        >
+          修复编码
         </el-button>
       </div>
       <span class="menu-manage__count">共 {{ totalCount }} 项</span>
@@ -49,7 +58,8 @@
 
       <el-table-column label="图标" width="70" align="center">
         <template slot-scope="{ row }">
-          <i v-if="iconClass(row.icon)" :class="iconClass(row.icon)" class="menu-icon" />
+          <Icon v-if="iconExists(row.icon)" :name="row.icon" class="menu-svg-icon" />
+          <i v-else-if="row.icon" :class="legacyIconClass(row.icon)" class="menu-icon" />
           <span v-else class="menu-icon--empty">--</span>
         </template>
       </el-table-column>
@@ -125,20 +135,9 @@
 
 <script>
 import { qryMenuList, deleteMenu, moveMenu } from '@/api/menuManage'
+import { fixMenuCodeByUrl as runMenuCodeFix } from '@/api/menuDataFix'
+import { iconExists as hasIcon, legacyIconClass as legacyIcon } from '@/icons/menuIcons'
 import MenuFormDrawer from './components/MenuFormDrawer'
-
-// 接口返回的是项目自定义 iconfont 名，这里映射成视觉近似的 Element 图标；
-// 以后接入真实图标库时，只需把这里换成 <svg-icon :icon-class="row.icon">
-const ICON_MAP = {
-  'icon-shouye': 'el-icon-s-home',
-  'icon-hangqingkanban': 'el-icon-data-line',
-  'icon-shujuyuce': 'el-icon-trend-charts',
-  'icon-xianhuofupan': 'el-icon-refresh',
-  'icon-gongkaishuju': 'el-icon-folder-opened',
-  'icon-zhongchangqi': 'el-icon-s-data',
-  'icon-siyoushuju': 'el-icon-lock',
-  'icon-ziliaoku': 'el-icon-notebook-2'
-}
 
 export default {
   name: 'MenuManage',
@@ -190,13 +189,51 @@ export default {
     window.removeEventListener('resize', this.updateTableHeight)
   },
   methods: {
+    // 点击「修复编码」才触发：确认框区分「仅预演」与「执行修复」，关闭则什么都不做
+    handleFixMenuCode() {
+      this.$confirm(
+        '将遍历菜单树，把目录 / 页面菜单中 url 有值的节点：menuCode 改为原 url 值，url 改为 @/view + 原 url。已修复过的节点会自动跳过。',
+        '批量修复 menuCode / url',
+        {
+          confirmButtonText: '执行修复',
+          cancelButtonText: '仅预演',
+          distinguishCancelAndClose: true,
+          type: 'warning'
+        }
+      ).then(() => this.fixMenuCodeByUrl({ dryRun: false }))
+        .catch(action => {
+          if (action === 'cancel') this.fixMenuCodeByUrl({ dryRun: true })
+        })
+    },
+    /**
+     * 批量修复 menuCode / url：只处理目录与页面菜单中 url 有值且未修复过的节点
+     */
+    async fixMenuCodeByUrl(options) {
+      const result = await runMenuCodeFix(options || {})
+      const dryRun = !!(options && options.dryRun)
+      if (dryRun) console.log('[menuCode 预演]', result.details)
+      const prefix = dryRun ? '预演' : '修复'
+      const summary = dryRun
+        ? `命中 ${result.matched} 条，未提交任何修改`
+        : `命中 ${result.matched} 条，已更新 ${result.updated} 条`
+      if (result.failures.length) {
+        this.$message.warning(`${prefix}完成：${summary}，失败 ${result.failures.length} 条`)
+      } else {
+        this.$message.success(`${prefix}完成：${summary}`)
+      }
+      if (!dryRun && result.updated) this.fetchList()
+      return result
+    },
     // 后端成功码：0（本项目约定）/ 200（历史接口）
     isOk(res) {
       return !!res && (res.code === 200 || res.code === 0)
     },
-    iconClass(icon) {
-      if (!icon) return ''
-      return ICON_MAP[icon] || 'el-icon-menu'
+    iconExists(name) {
+      return hasIcon(name)
+    },
+    // 历史 iconfont 值：用近似的 Element 图标兜底展示
+    legacyIconClass(name) {
+      return legacyIcon(name)
     },
     // 真实接口字段是 meantype（文档/报错文案误写成 menutype），这里兼容两种写法
     menutypeOf(row) {
@@ -526,13 +563,21 @@ $menu-expand-gap: 3px;
   color: #303133;
 }
 
+.menu-svg-icon {
+  width: 16px;
+  height: 16px;
+  color: #0088ff;
+  vertical-align: middle;
+}
+
 .menu-icon {
   font-size: 16px;
   color: #0088ff;
+}
 
-  &--empty {
-    color: #c0c4cc;
-  }
+.menu-icon--empty {
+  font-size: 16px;
+  color: #c0c4cc;
 }
 
 .menu-url {
