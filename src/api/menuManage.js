@@ -3,7 +3,7 @@ import { getToken } from '@/utils/auth'
 
 /**
  * 菜单管理接口层（路径与《菜单与功能权限管理》接口文档一致）
- * 响应结构：{ code: 0, msg: 'success', data: ... }（兼容 code === 200）
+ * 响应结构：{ code: 200, msg: 'success', data: ... }（兼容 code === 0）
  */
 const service = axios.create({
   baseURL: process.env.VUE_APP_BASE_API,

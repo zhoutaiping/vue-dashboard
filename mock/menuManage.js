@@ -2,7 +2,7 @@
  * 菜单管理 mock
  *
  * 列表接口：GET /system/menu/tree?keyword=xxx
- * 响应结构：{ code: 0, msg: 'success', data: [ ...树形节点 ] }
+ * 响应结构：{ code: 200, msg: 'success', data: [ ...树形节点 ] }（与真实接口一致）
  *
  * 节点字段（与接口文档一一对应）：
  *   id         菜单ID
@@ -371,10 +371,10 @@ const MENU_TREE = [
 let menuSeq = 900
 
 function ok(data, msg = 'success') {
-  return { code: 0, msg, data }
+  return { code: 200, msg, data }
 }
 
-function fail(msg, code = 4005) {
+function fail(msg, code = 3001) {
   return { code, msg, data: null }
 }
 

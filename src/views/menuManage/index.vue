@@ -19,7 +19,9 @@
       <span class="menu-manage__count">共 {{ totalCount }} 项</span>
     </div>
 
-    <!-- 树形菜单表格：row-key=id + tree-props children 构成层级，展开箭头在第一列 -->
+    <!-- 树形菜单表格：row-key=id + tree-props children 构成层级，展开箭头在第一列
+         刻意不用 fixed 列：element-ui 每多一个固定列就会额外渲染一份完整行 DOM，
+         Vue2 + webpack3 老项目在大表格上会慢数倍 -->
     <el-table
       ref="table"
       v-loading="loading"
@@ -31,12 +33,12 @@
       element-loading-text="加载中..."
       border
       size="mini"
+      @expand-change="syncExpandState"
     >
       <el-table-column
         prop="name"
         label="菜单名称"
         width="220"
-        fixed="left"
         class-name="menu-name-cell"
         label-class-name="menu-name-cell"
       >
@@ -52,9 +54,18 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="code" label="权限编码" min-width="150" show-overflow-tooltip />
+      <!-- 原生 title 代替 show-overflow-tooltip：大表格少渲染上千个 ElTooltip 组件 -->
+      <el-table-column prop="code" label="权限编码" min-width="150">
+        <template slot-scope="{ row }">
+          <span class="cell-ellipsis" :title="row.code">{{ row.code }}</span>
+        </template>
+      </el-table-column>
 
-      <el-table-column prop="menuCode" label="前端菜单编码" min-width="250" show-overflow-tooltip />
+      <el-table-column prop="menuCode" label="前端菜单编码" min-width="250">
+        <template slot-scope="{ row }">
+          <span class="cell-ellipsis" :title="row.menuCode">{{ row.menuCode }}</span>
+        </template>
+      </el-table-column>
 
       <el-table-column label="菜单类型" width="90" align="center">
         <template slot-scope="{ row }">
@@ -68,7 +79,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="排序操作" width="186" align="center" fixed="right">
+      <el-table-column label="排序操作" width="186" align="center">
         <template slot-scope="{ row }">
           <div class="sort-btns">
             <el-button
@@ -91,7 +102,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="196" align="center" fixed="right">
+      <el-table-column label="操作" width="196" align="center">
         <template slot-scope="{ row }">
           <el-button type="text" size="mini" class="link-btn" @click.stop="handleEdit(row)">编辑</el-button>
           <el-button type="text" size="mini" class="link-btn link-btn--add" @click.stop="handleAddChild(row)">新增下级</el-button>
@@ -139,8 +150,13 @@ export default {
       // 接口原始树（不随搜索变化），排序/编辑/删除都以它为准
       rawList: [],
       totalCount: 0,
-      // 全部展开状态（配合 applyExpandAll 逐行同步）
+      // 全部展开状态（配合 applyExpandAll 批量同步）
       expandAll: false,
+      // 父级总数 / 已展开数：expand-change 用计数增量维护，避免每次都遍历整棵树
+      parentCount: 0,
+      expandedCount: 0,
+      // 批量操作期间屏蔽事件回写
+      batchSyncing: false,
       tableHeight: 560,
       expandedOnce: false,
       // 新增 / 编辑抽屉状态（表单逻辑在 MenuFormDrawer 组件内）
@@ -176,7 +192,7 @@ export default {
   methods: {
     // 后端成功码：0（本项目约定）/ 200（历史接口）
     isOk(res) {
-      return !!res && (res.code === 1 || res.code === 200)
+      return !!res && (res.code === 200 || res.code === 0)
     },
     iconClass(icon) {
       if (!icon) return ''
@@ -221,10 +237,8 @@ export default {
         if (!this.expandedOnce) {
           this.expandedOnce = true
           this.expandFirstParent()
-        } else {
-          // 数据刷新后 el-table 会重置展开态，按当前状态恢复
-          this.applyExpandAll()
         }
+        this.restoreExpandState()
       })
     },
     countTree(list) {
@@ -249,32 +263,102 @@ export default {
       const first = this.tableData.find(item => (item.children || []).length)
       if (first) this.$refs.table.toggleRowExpansion(first, true)
     },
+    // 兼容 row-key 为字符串或函数（老项目里两种都有）
+    rowKeyValue(row, rowKey) {
+      if (typeof rowKey === 'function') return rowKey(row)
+      return row[rowKey || 'id']
+    },
+    // 收集当前表格里的父级节点：只遍历一次，不用递归函数调用开销
+    collectParents() {
+      const parents = []
+      const stack = (this.tableData || []).slice()
+      while (stack.length) {
+        const row = stack.pop()
+        if (!row) continue
+        const children = row.children || []
+        if (children.length) parents.push(row)
+        for (let i = 0; i < children.length; i += 1) stack.push(children[i])
+      }
+      return parents
+    },
+    // 数据刷新 / 搜索过滤后重算一次计数（整棵树只扫一次）
+    refreshExpandState() {
+      const table = this.$refs.table
+      const treeData = (table && table.store && table.store.states && table.store.states.treeData) || {}
+      const keys = Object.keys(treeData)
+      let parentCount = 0
+      let expandedCount = 0
+      for (let i = 0; i < keys.length; i += 1) {
+        const node = treeData[keys[i]]
+        if (node && node.children && node.children.length) {
+          parentCount += 1
+          if (node.expanded) expandedCount += 1
+        }
+      }
+      this.parentCount = parentCount
+      this.expandedCount = expandedCount
+      this.expandAll = parentCount > 0 && expandedCount === parentCount
+    },
     /**
-     * 逐行同步展开状态（全部展开 / 全部收起）
-     * 不用 default-expand-all：它只在表格初始化/重建时生效，
-     * 数据刷新、搜索过滤后都会失效，导致「全部收起」点了没反应
-     *
-     * 先走官方 toggleRowExpansion，再回写 store.states.treeData[id].expanded 兜底：
-     * 展开态在 element-ui 里就是这个字段，任何 2.x 版本都生效，
-     * 避免个别版本/封装下 toggleRowExpansion 不落库导致收起没反应
+     * 批量展开 / 收起
+     * 不逐行调 toggleRowExpansion：那会每行触发一次渲染、一次 updateTableScrollY
+     * 和一次 expand-change，节点多时接近 O(N^2)，老项目上明显卡顿。
+     * element-ui 树表的展开态就是 store.states.treeData[key].expanded，
+     * 在同一个同步循环里批量赋值，Vue 只会合并成一次渲染。
      */
     applyExpandAll() {
       const table = this.$refs.table
-      if (!table || !table.store) return
+      if (!table) return
+      const store = table.store
+      const states = store && store.states
+      const treeData = (states && states.treeData) || {}
       const expand = !!this.expandAll
-      const treeData = (table.store.states && table.store.states.treeData) || {}
+      const parents = this.collectParents()
+      let written = 0
 
-      const walk = list => (list || []).forEach(row => {
-        if ((row.children || []).length) {
-          table.toggleRowExpansion(row, expand)
-          const node = treeData[row.id]
-          if (node && node.expanded !== expand) node.expanded = expand
+      this.batchSyncing = true
+      for (let i = 0; i < parents.length; i += 1) {
+        const key = this.rowKeyValue(parents[i], states && states.rowKey)
+        const node = treeData[key]
+        if (node && 'expanded' in node) {
+          // 状态未变的节点不赋值，省掉无意义的响应式通知
+          if (node.expanded !== expand) node.expanded = expand
+          written += 1
         }
-        walk(row.children)
-      })
-      walk(this.tableData)
+      }
+      // 老版本 element-ui 若没有 treeData.expanded，退回官方 API
+      if (written !== parents.length && table.toggleRowExpansion) {
+        for (let i = 0; i < parents.length; i += 1) {
+          table.toggleRowExpansion(parents[i], expand)
+        }
+      }
+      this.batchSyncing = false
 
-      if (table.store.updateTableScrollY) table.store.updateTableScrollY()
+      if (store && store.updateTableScrollY) store.updateTableScrollY()
+      this.parentCount = parents.length
+      this.expandedCount = expand ? parents.length : 0
+    },
+    // 单行展开/收起：O(1) 增量维护，不扫整棵树
+    syncExpandState(row, expanded) {
+      if (this.batchSyncing) return
+      if (typeof expanded !== 'boolean') {
+        this.refreshExpandState()
+        return
+      }
+      if (expanded) this.expandedCount += 1
+      else this.expandedCount -= 1
+      if (this.expandedCount < 0) this.expandedCount = 0
+      if (this.expandedCount > this.parentCount) this.expandedCount = this.parentCount
+      this.expandAll = this.parentCount > 0 && this.expandedCount === this.parentCount
+    },
+    // 表格重建 / 数据刷新后恢复展开态：双 nextTick 等新表格挂载完成
+    restoreExpandState() {
+      this.$nextTick(() => {
+        this.$nextTick(() => {
+          if (this.expandAll) this.applyExpandAll()
+          this.refreshExpandState()
+        })
+      })
     },
     toggleExpandAll() {
       this.expandAll = !this.expandAll
@@ -454,6 +538,14 @@ $menu-expand-gap: 3px;
 .menu-url {
   color: #606266;
   font-size: 12px;
+}
+
+/* 原生 title 的省略号样式（替代 show-overflow-tooltip） */
+.cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* URL 列：超长地址换行显示（不再用省略号 + tooltip），横向可滚动时也不被截断 */
