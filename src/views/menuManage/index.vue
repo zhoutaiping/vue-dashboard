@@ -191,6 +191,8 @@ export default {
   methods: {
     // 点击「修复编码」才触发：确认框区分「仅预演」与「执行修复」，关闭则什么都不做
     handleFixMenuCode() {
+      // 兜底：即便修复函数本身抛错（迁移后方法缺失 / this 丢失），也给出提示而不是静默
+      const onError = e => this.$message.error(`修复失败：${(e && e.message) || '请求异常'}`)
       this.$confirm(
         '将遍历菜单树，把目录 / 页面菜单中 url 有值的节点：menuCode 改为原 url 值，url 改为 @/view + 原 url。已修复过的节点会自动跳过。',
         '批量修复 menuCode / url',
@@ -200,24 +202,40 @@ export default {
           distinguishCancelAndClose: true,
           type: 'warning'
         }
-      ).then(() => this.fixMenuCodeByUrl({ dryRun: false }))
-        .catch(action => {
-          if (action === 'cancel') this.fixMenuCodeByUrl({ dryRun: true })
-        })
+      ).then(
+        () => this.fixMenuCodeByUrl({ dryRun: false }),
+        action => {
+          // 用 then 的第二个参数接收取消，把「取消」和「业务异常」分开；
+          // 否则 .catch 会把修复过程中的异常当成取消吞掉，表现就是点了没反应、接口一个都不发。
+          // distinguishCancelAndClose 下点 X 是 'close'，什么都不做。
+          if (action === 'cancel') return this.fixMenuCodeByUrl({ dryRun: true })
+        }
+      ).catch(onError)
     },
     /**
      * 批量修复 menuCode / url：只处理目录与页面菜单中 url 有值且未修复过的节点
      */
     async fixMenuCodeByUrl(options) {
-      const result = await runMenuCodeFix(options || {})
+      let result
+      try {
+        result = await runMenuCodeFix(options || {})
+      } catch (e) {
+        // 迁移后接口不通 / 字段不兼容时给出明确提示，避免静默失败
+        this.$message.error(`修复失败：${(e && e.message) || '请求异常'}`)
+        return null
+      }
       const dryRun = !!(options && options.dryRun)
       if (dryRun) console.log('[menuCode 预演]', result.details)
       const prefix = dryRun ? '预演' : '修复'
       const summary = dryRun
-        ? `命中 ${result.matched} 条，未提交任何修改`
-        : `命中 ${result.matched} 条，已更新 ${result.updated} 条`
+        ? `遍历 ${result.total} 个节点，命中 ${result.matched} 条，未提交任何修改`
+        : `遍历 ${result.total} 个节点，命中 ${result.matched} 条，已更新 ${result.updated} 条`
+      // 把第一条失败原因带出来：tree 成功码 / 数据结构不匹配时，能直接从提示定位
+      const reason = result.failures.length
+        ? `；失败 ${result.failures.length} 条，首个原因：${result.failures[0].msg}`
+        : ''
       if (result.failures.length) {
-        this.$message.warning(`${prefix}完成：${summary}，失败 ${result.failures.length} 条`)
+        this.$message.warning(`${prefix}完成：${summary}${reason}`)
       } else {
         this.$message.success(`${prefix}完成：${summary}`)
       }

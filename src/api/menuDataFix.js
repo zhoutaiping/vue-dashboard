@@ -17,7 +17,29 @@ import { qryMenuList, updateMenu } from './menuManage'
 const URL_PREFIX = '@/view'
 
 function isOk(res) {
-  return !!res && (res.code === 200 || res.code === 0)
+  if (!res) return false
+  const code = res.code
+  // 兼容后端把码值序列化成字符串 / 用 success 标记
+  return code === 200 || code === 0 || code === '200' || code === '0' || res.success === true
+}
+
+// 迁移后后端包装层级可能不同：data 直接是数组，或包在 tree / list / rows / records 里
+function toTree(res) {
+  const data = res && res.data
+  if (Array.isArray(data)) return data
+  const candidates = [
+    data && data.tree,
+    data && data.list,
+    data && data.rows,
+    data && data.records,
+    res && res.rows,
+    res && res.list,
+    res && res.tree
+  ]
+  for (let i = 0; i < candidates.length; i += 1) {
+    if (Array.isArray(candidates[i])) return candidates[i]
+  }
+  return []
 }
 
 function flagOf(value) {
@@ -57,12 +79,27 @@ export async function fixMenuCodeByUrl(options) {
     details: []
   }
 
-  const treeRes = await qryMenuList({})
-  if (!isOk(treeRes)) {
-    result.failures.push({ id: '-', name: '-', msg: (treeRes && treeRes.msg) || '菜单树加载失败' })
+  // tree 请求异常也必须变成可读的失败原因，不能往上抛后被 $confirm 的 catch 吞掉
+  let treeRes
+  try {
+    treeRes = await qryMenuList({})
+  } catch (e) {
+    result.failures.push({ id: '-', name: '-', msg: `菜单树请求异常：${(e && e.message) || 'unknown'}` })
     return result
   }
-  const tree = Array.isArray(treeRes.data) ? treeRes.data : []
+  if (!isOk(treeRes)) {
+    result.failures.push({
+      id: '-',
+      name: '-',
+      msg: `菜单树加载失败（code=${treeRes && treeRes.code}）：${(treeRes && treeRes.msg) || ''}`
+    })
+    return result
+  }
+  const tree = toTree(treeRes)
+  if (!tree.length) {
+    result.failures.push({ id: '-', name: '-', msg: '菜单树为空，请确认 tree 接口 data 的结构' })
+    return result
+  }
 
   const walk = async list => {
     for (let i = 0; i < (list || []).length; i += 1) {
