@@ -56,15 +56,18 @@
                面板会「点了不出现」（不是被遮挡，是根本不在全屏层里）。
                关掉后面板留在日期选择器内部，属于全屏元素子树，全屏下照样正常弹出 -->
           <el-date-picker
-            v-model="query.month"
-            type="month"
+            v-model="query.monthRange"
+            class="month-range-picker"
+            type="monthrange"
             size="small"
             :clearable="false"
             :append-to-body="false"
             :picker-options="monthPickerOptions"
             value-format="yyyy-MM"
-            placeholder="选择月份"
-            style="width: 120px;"
+            range-separator="至"
+            start-placeholder="开始月份"
+            end-placeholder="结束月份"
+            style="width: 180px;"
           />
         </div>
       </div>
@@ -355,7 +358,7 @@ export default {
     // regionName 必须进 key：否则点蒙西、点蒙东都是「内蒙古」层级，不会重新取数
     reportKey() {
       return [
-        this.query.month,
+        (this.query.monthRange || []).join('|'),
         this.categoryParam,
         this.statusParam,
         this.query.level,
@@ -381,21 +384,28 @@ export default {
       if (!region) return this.currentProvinceFullName
       return DRILL_REGION_AS_PROVINCE_NAME ? region : this.currentProvinceFullName
     },
-    // 全局报表请求参数（单一来源，所有报表接口共用这 4 个字段）
+    // 月份区间参数（单一来源）：接口原 month 已拆成 startMonth / endMonth，格式 yyyy-MM
+    monthParams() {
+      const range = this.query.monthRange || []
+      return {
+        startMonth: range[0] || '',
+        endMonth: range[1] || ''
+      }
+    },
+    // 全局报表请求参数（单一来源，所有报表接口共用）
     // industry: 行业类型数组（多选），元素为行业名（能源电力/节能环保/智慧能源/绿色交通/其他）。
     // 「全部」= 展开后的全部行业名；「全不选」= 空数组（接口据此返回空结果集）
-    // month: 查询月份 yyyy-MM
+    // startMonth / endMonth: 查询月份区间，yyyy-MM
     // provinceName: 省份（下钻省份的接口全称）或拆分区域名，空=全国
     // status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
     reportParams() {
-      return {
+      return Object.assign({}, this.monthParams, {
         industry: this.industryParam,
-        month: this.query.month || '',
         provinceName: this.drillProvinceParam,
         status: this.statusParam
-      }
+      })
     },
-    // 月份选择器禁用项：不允许选择 2024-01 之前的月份
+    // 月份区间选择器禁用项：开始/结束月份都不允许早于 MIN_MONTH（2024-01）
     monthPickerOptions() {
       const [y, m] = (MIN_MONTH || '2024-01').split('-').map(Number)
       const min = new Date(y, m - 1, 1).getTime()
@@ -1203,7 +1213,7 @@ export default {
       this.priceType = this.defaultPriceType
     },
     // 点位点击：详情卡片由地图组件弹出，此处请求项目详情接口并回传给卡片
-    // 入参 { industry, month, projectCode, status }（1在建 2运营 3在建和运营 4未选择）
+    // 入参 { industry, startMonth, endMonth, projectCode, status }（1在建 2运营 3在建和运营 4未选择）
     async handlePointClick(point) {
       this.pointDetail = null
       this.pointDetailLoading = true
@@ -1213,7 +1223,7 @@ export default {
       const detail = await this.safeRequest(() => queryProjectDetail({
         // industry 统一传数组（接口不收字符串）：无行业信息时传空数组 = 全部
         industry: point.industry ? [point.industry] : [],
-        month: this.query.month,
+        ...this.monthParams,
         projectCode: point.projectCode,
         status: (point.status && STATUS_PARAM_MAP[point.status]) || globalStatus
       }), null)
@@ -1276,6 +1286,33 @@ export default {
   background-color: rgba(96, 105, 127, 0.7);
   color: #fff;
   border-color: none !important;
+}
+
+/* 月份区间控件：整块只用一层半透明底色。
+   内部 input / 分隔符 / 图标若各自再带半透明背景，会与外层叠加成更深的颜色，
+   中间「至」区域与两侧就会出现色差，因此内部统一置为 transparent。 */
+.home-overview__toolbar-right ::v-deep .month-range-picker.el-range-editor {
+  border-color: transparent !important;
+  background-color: rgba(96, 105, 127, 0.5) !important;
+  color: #fff;
+}
+.home-overview__toolbar-right ::v-deep .month-range-picker.el-range-editor.is-active,
+.home-overview__toolbar-right ::v-deep .month-range-picker.el-range-editor:hover {
+  border-color: transparent !important;
+  background-color: rgba(96, 105, 127, 0.5) !important;
+}
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-range-input,
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-range-separator,
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-range__icon {
+  background-color: transparent !important;
+  color: #fff;
+}
+/* clearable=false 时 element-ui 仍会渲染清空图标，hover / 展开时可能占位，直接隐藏 */
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-range__close-icon {
+  display: none !important;
+}
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-range-input::placeholder {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .home-overview {

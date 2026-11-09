@@ -240,10 +240,26 @@ function buildPriceOnly(seed) {
   }
 }
 
-function buildMonths(count) {
+// 按接口的 startMonth / endMonth 生成连续月份（yyyy-MM）；
+// 字段缺失、格式不对或区间异常时回退为「近 count 个月」，保证旧调用与 mock 数据不空
+function buildMonths(body, count) {
   const months = []
+  const start = String((body && body.startMonth) || '')
+  const end = String((body && body.endMonth) || '')
+  if (/^\d{4}-\d{2}$/.test(start) && /^\d{4}-\d{2}$/.test(end)) {
+    const [sy, sm] = start.split('-').map(Number)
+    const [ey, em] = end.split('-').map(Number)
+    const span = (ey - sy) * 12 + (em - sm)
+    if (span >= 0 && span <= 120) {
+      for (let i = 0; i <= span; i += 1) {
+        const d = new Date(sy, sm - 1 + i, 1)
+        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      }
+      return months
+    }
+  }
   const now = new Date()
-  for (let i = count - 1; i >= 0; i--) {
+  for (let i = count - 1; i >= 0; i -= 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
@@ -271,7 +287,7 @@ function parseIndustry(raw) {
 
 module.exports = [
   // 项目总览（全国/省份）：POST /largeScreen/queryProjectOverview
-  // 入参 { industry, month, provinceName, status }；返回 { constructionCount, operationCount, industryNum }
+  // 入参 { industry, startMonth, endMonth, provinceName, status }；返回 { constructionCount, operationCount, industryNum }
   {
     url: '/largeScreen/queryProjectOverview',
     type: 'post',
@@ -319,7 +335,7 @@ module.exports = [
   },
 
   // 地区排名（全国）：POST /largeScreen/queryNationalRanking
-  // 入参 { industry, month, rankingType, status }；返回 data: [{ nameType(省份全称), value }]
+  // 入参 { industry, startMonth, endMonth, rankingType, status }；返回 data: [{ nameType(省份全称), value }]
   {
     url: '/largeScreen/queryNationalRanking',
     type: 'post',
@@ -335,7 +351,7 @@ module.exports = [
   },
 
   // 地区排名（省内）：POST /largeScreen/queryRegionRanking
-  // 入参 { industry, month, provinceName, rankingType, status }；返回 data: [{ nameType(市/区县名称), value }]
+  // 入参 { industry, startMonth, endMonth, provinceName, rankingType, status }；返回 data: [{ nameType(市/区县名称), value }]
   // 特殊省份按业务规则拆分：内蒙古→蒙西/蒙东，河北→冀北/河北南网
   {
     url: '/largeScreen/queryRegionRanking',
@@ -366,7 +382,7 @@ module.exports = [
   },
 
   // 地图电价：POST /largeScreen/mapDisplay/price
-  // 入参 { industry, month, provinceName, status }（与 mapDisplay 完全一致）
+  // 入参 { industry, startMonth, endMonth, provinceName, status }（与 mapDisplay 完全一致）
   // 全国（provinceName 空）→ { 省名/业务区域名: 电价 }；省份下钻 → { 地市名: 电价 }
   // 只返回电价，不含项目列表；key 与地图 GeoJSON 区域名一致，前端据此着色（热力）与浮层展示
   {
@@ -400,7 +416,7 @@ module.exports = [
   },
 
   // 地图展示：POST /largeScreen/mapDisplay
-  // 入参 { industry, month, provinceName, status }
+  // 入参 { industry, startMonth, endMonth, provinceName, status }
   // 全国请求（provinceName 空）→ data: 省份数组；省份请求 → data: 单对象（当前省电价汇总 + 项目列表）
   {
     url: '/largeScreen/mapDisplay',
@@ -459,7 +475,7 @@ module.exports = [
   },
 
   // 地图点位详情：POST /largeScreen/projectDetail
-  // 入参 { industry, month, projectCode, status }
+  // 入参 { industry, startMonth, endMonth, projectCode, status }
   // 按 projectCode 末三位奇偶返回两类项目：偶数 → POWER 发电项目，奇数 → NON_STANDARD 非标项目
   {
     url: '/largeScreen/projectDetail',
@@ -512,7 +528,7 @@ module.exports = [
   },
 
   // 建设/运营管理项目报表：POST /largeScreen/queryBuildandOperate
-  // 入参 { industry, month, provinceName, status }；返回 data: 逐月数组
+  // 入参 { industry, startMonth, endMonth, provinceName, status }；返回 data: 逐月数组
   {
     url: '/largeScreen/queryBuildandOperate',
     type: 'post',
@@ -524,7 +540,7 @@ module.exports = [
       const ratio = provinceName ? 0.08 : 1
       const statusFactor = field => (status === '1' && field === 'operationCount') || (status === '2' && field === 'constructionCount') ? 0.2 : 1
 
-      const months = buildMonths(12)
+      const months = buildMonths(body, 12)
       return ok(months.map((m, i) => ({
         month: m,
         constructionCount: Math.round(randomInt(60, 260, i + 2) * ratio * statusFactor('constructionCount')),
@@ -535,7 +551,7 @@ module.exports = [
   },
 
   // 运营项目情况：POST /largeScreen/queryOperateDetail
-  // 入参 { industry, month, operateType, provinceName, status }；返回指标 + 指标图表一体
+  // 入参 { industry, startMonth, endMonth, operateType, provinceName, status }；返回指标 + 指标图表一体
   {
     url: '/largeScreen/queryOperateDetail',
     type: 'post',
@@ -546,7 +562,7 @@ module.exports = [
       // 省份下钻后数值按比例缩小
       const ratio = provinceName ? 0.08 : 1
       const nonstandard = operateType === '3'
-      const months = buildMonths(13)
+      const months = buildMonths(body, 13)
 
       // 指标图表：风电/光伏 oneMetric=利用小时数；非标 oneMetric=度电收入（万元/kWh）；yield=达标率
       const lineChart = months.map((m, i) => ({

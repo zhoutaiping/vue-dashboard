@@ -346,15 +346,17 @@ export const REGION_PRICE_COMPARE = [
 // 最小可选月份：2024-01 之前的月份不允许选择（地图电价/报表数据从 2024-01 起才有）
 export const MIN_MONTH = '2024-01'
 
-// 默认查询月份：M-4（当前月往前推 4 个月，yyyy-MM）
-// 例：当前 2026-10 → 2026-06。用 new Date(y, m - 4, 1) 由 Date 处理跨年借位，无需手工换算
+// 默认月份区间：近 12 个月（含当前月），yyyy-MM，对应接口 startMonth / endMonth
+// 例：当前 2026-11 → ['2025-12', '2026-11']。用 Date 处理跨年借位，起始/结束都夹到 MIN_MONTH
 const now = new Date()
-const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 4, 1)
-// 不超过最小可选月份（如当前为 2024 年初，M-4 会落到 2023 年，需夹到 2024-01）
+const monthText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
 const minMonthDate = new Date(MIN_Y, MIN_M - 1, 1)
-if (defaultMonthDate < minMonthDate) defaultMonthDate.setTime(minMonthDate.getTime())
-const DEFAULT_MONTH = `${defaultMonthDate.getFullYear()}-${String(defaultMonthDate.getMonth() + 1).padStart(2, '0')}`
+const endMonthDate = new Date(now.getFullYear(), now.getMonth(), 1)
+const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+if (endMonthDate < minMonthDate) endMonthDate.setTime(minMonthDate.getTime())
+if (startMonthDate < minMonthDate) startMonthDate.setTime(minMonthDate.getTime())
+export const DEFAULT_MONTH_RANGE = [monthText(startMonthDate), monthText(endMonthDate)]
 
 // 默认查询条件
 export const DEFAULT_QUERY = {
@@ -368,7 +370,9 @@ export const DEFAULT_QUERY = {
   // 必须在默认查询里声明：Vue 2 对 data 中不存在的新增属性不做响应式转换，
   // 否则 query.categories 赋值后不会触发 reportKey / categorySelection 重算，表现为行业多选不生效
   categories: [],
-  month: DEFAULT_MONTH,
+  // 月份区间 [startMonth, endMonth]，yyyy-MM；同样必须在默认查询里声明数组，
+  // 否则 monthrange 赋值不会触发 reportKey 重算（Vue 2 响应式限制）
+  monthRange: DEFAULT_MONTH_RANGE.slice(),
   rankType: 'projectCount',
   energyType: 'wind' // 风电 / 光伏 / 非标
 }

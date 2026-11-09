@@ -30,9 +30,9 @@ function postRequest(url, data) {
 // 说明：所有接口的 industry 统一传「数组」，不传字符串
 //   全部 → []；多选 → ["能源电力","其他"]
 // 项目总览（全国/省份）：POST /largeScreen/queryProjectOverview
-// 入参 { industry, month, provinceName, status }
+// 入参 { industry, startMonth, endMonth, provinceName, status }
 //   - industry: 行业类型数组，元素为 能源电力/节能环保/智慧能源/绿色交通/其他，空数组=全部
-//   - month: 查询月份 yyyy-MM
+//   - startMonth / endMonth: 查询月份区间，格式 yyyy-MM
 //   - provinceName: 省份名称，空=全国
 //   - status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
 // 返回 { constructionCount, operationCount, industryNum: [{ industry, projectCount, percentage }] }
@@ -41,7 +41,7 @@ export function queryProjectOverview(data) {
 }
 
 // 地区排名（全国）：POST /largeScreen/queryNationalRanking
-// 入参 { industry, month, rankingType, status }
+// 入参 { industry, startMonth, endMonth, rankingType, status }
 //   - rankingType: projectCount·项目个数, rate·达标率, capacity·装机容量, hour·利用小时数
 // 返回 data: [{ nameType(省份/电站名称), value }]
 export function queryNationalRanking(data) {
@@ -49,14 +49,14 @@ export function queryNationalRanking(data) {
 }
 
 // 地区排名（省内）：POST /largeScreen/queryRegionRanking
-// 入参 { industry, month, provinceName, rankingType, status }
+// 入参 { industry, startMonth, endMonth, provinceName, rankingType, status }
 // 返回 data: [{ nameType(市/区县名称), value }]
 export function queryRegionRanking(data) {
   return postRequest('/largeScreen/queryRegionRanking', data)
 }
 
 // 地图展示：POST /largeScreen/mapDisplay
-// 入参 { industry, month, provinceName, status }
+// 入参 { industry, startMonth, endMonth, provinceName, status }
 // 返回 data：
 //   全国请求（provinceName 为空）→ 省份数组：[{ avgSettlementPrice, avgWindSettlementPrice, avgPvSettlementPrice,
 //     benchmarkPrice, projectList: [{ projectName, projectCode, provinceName, cityName, longitude, latitude,
@@ -69,7 +69,7 @@ export function queryMapDisplay(data) {
 }
 
 // 地图电价（地图电价展示 + 热力着色）：POST /largeScreen/mapDisplay/price
-// 入参与 mapDisplay 完全一致：{ industry, month, provinceName, status }
+// 入参与 mapDisplay 完全一致：{ industry, startMonth, endMonth, provinceName, status }
 //   - provinceName 为空 → 全国：返回「省名 / 业务区域名（蒙西/蒙东、冀北/河北南网）→ 电价」
 //   - 已下钻省份 → 返回「地市名 → 电价」（key 与地图 GeoJSON 区域名一致）
 // 返回 data 为 Map（省名/地市名 → MapPriceOverviewDto）：
@@ -81,14 +81,14 @@ export function queryMapPrice(data) {
 }
 
 // 建设/运营管理项目报表：POST /largeScreen/queryBuildandOperate
-// 入参与项目总览一致：{ industry, month, provinceName, status }
+// 入参与项目总览一致：{ industry, startMonth, endMonth, provinceName, status }
 // 返回 data: [{ month, constructionCount, operationCount, outstandingCount }]（逐月数组）
 export function queryBuildandOperate(data) {
   return postRequest('/largeScreen/queryBuildandOperate', data)
 }
 
 // 运营项目情况：POST /largeScreen/queryOperateDetail
-// 入参 { industry, month, operateType, provinceName, status }
+// 入参 { industry, startMonth, endMonth, operateType, provinceName, status }
 //   - operateType: 类型 1.风电; 2.光伏; 3.非标
 // 返回 data: { projectCount, capacity, onlinePower, usehour|useHour, electrovalence, income,
 //   writeIncome, accountIncome, yield, oneMetric,
@@ -106,9 +106,9 @@ export function getProjectList(params) {
 }
 
 // 地图点位详情：POST /largeScreen/projectDetail
-// 入参 { industry, month, projectCode, status }
+// 入参 { industry, startMonth, endMonth, projectCode, status }
 //   - industry: 行业类型数组，元素为 能源电力/节能环保/智慧能源/绿色交通/其他，空数组=全部
-//   - month: 查询月份 yyyy-MM
+//   - startMonth / endMonth: 查询月份区间，格式 yyyy-MM
 //   - projectCode: 项目编号
 //   - status: 项目状态 1在建; 2运营; 3在建和运营; 6未选择
 // 返回 data:
