@@ -36,21 +36,19 @@ export const station_type = {
   '合规清单': station2 // 绿
 }
 
-// 行业定义（name 与接口 industry 字段一致；color 用于地图打点与图表，对齐原型配色）
+// 行业定义（真实接口 industry 只有两种：风电、地面光伏，支持多选）
+// name 与接口字段一致，id 与 mock/homeOverview.js 保持一致；color 用于图表与地图图例
 export const CATEGORIES = [
-  { id: 'power', name: '能源电力', color: '#0088ff' },
-  { id: 'energy', name: '节能环保', color: '#f5a623' },
-  { id: 'build', name: '智慧能源', color: '#9254de' },
-  { id: 'traffic', name: '绿色交通', color: '#2fc25b' },
-  { id: 'other', name: '其他', color: '#6f7ef2' }
+  { id: 'wind', name: '风电', color: '#0088ff' },
+  { id: 'groundPv', name: '地面光伏', color: '#f5a623' }
 ]
 
 // 行业"全部"标识（industryNum 第一项）
 export const INDUSTRY_ALL = '全部'
 
-// 「能源电力」行业 id：运营项目情况的类型选项与默认值由它决定
-// 选中行业包含能源电力（含「全部」）→ 风电/光伏/非标三项，默认风电；
-// 不包含能源电力 → 仅非标一项，默认非标
+// 历史常量：早期按「能源电力」行业决定运营项目情况的页签。
+// 现行逻辑固定展示风电/光伏/非标三项（index.vue energyTypeOptions），不再依赖行业 id；
+// 保留导出仅为兼容旧引用，当前 CATEGORIES 已不含该 id
 export const POWER_CATEGORY_ID = 'power'
 
 // 地图状态筛选（多选集合）→ 项目总览接口 status 参数

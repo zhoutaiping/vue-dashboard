@@ -28,10 +28,10 @@ function postRequest(url, data) {
 }
 
 // 说明：所有接口的 industry 统一传「数组」，不传字符串
-//   全部 → []；多选 → ["能源电力","其他"]
+//   全部 → []；多选 → ["风电","地面光伏"]
 // 项目总览（全国/省份）：POST /largeScreen/queryProjectOverview
 // 入参 { industry, startMonth, endMonth, provinceName, status }
-//   - industry: 行业类型数组，元素为 能源电力/节能环保/智慧能源/绿色交通/其他，空数组=全部
+//   - industry: 行业类型数组，元素为 风电/地面光伏，空数组=全部
 //   - startMonth / endMonth: 查询月份区间，格式 yyyy-MM
 //   - provinceName: 省份名称，空=全国
 //   - status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
@@ -107,7 +107,7 @@ export function getProjectList(params) {
 
 // 地图点位详情：POST /largeScreen/projectDetail
 // 入参 { industry, startMonth, endMonth, projectCode, status }
-//   - industry: 行业类型数组，元素为 能源电力/节能环保/智慧能源/绿色交通/其他，空数组=全部
+//   - industry: 行业类型数组，元素为 风电/地面光伏，空数组=全部
 //   - startMonth / endMonth: 查询月份区间，格式 yyyy-MM
 //   - projectCode: 项目编号
 //   - status: 项目状态 1在建; 2运营; 3在建和运营; 6未选择

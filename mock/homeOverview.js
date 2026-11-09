@@ -41,13 +41,11 @@ const PROVINCES = [
   { code: '650000', name: '新疆', lng: 87.617, lat: 43.792 }
 ]
 
-// 分类（颜色用于地图打点与图表；name 与接口 industry 字段一致）
+// 行业（真实接口 industry 只有两种：风电、地面光伏，支持多选）
+// name 与接口字段一致；count 为项目总览的行业基数，color 与前端 config.CATEGORIES 对齐
 const CATEGORIES = [
-  { id: 'power', name: '能源电力', color: '#0088ff', count: 210 },
-  { id: 'energy', name: '节能环保', color: '#67c23a', count: 151 },
-  { id: 'build', name: '智慧能源', color: '#e6a23c', count: 186 },
-  { id: 'traffic', name: '绿色交通', color: '#f56c6c', count: 188 },
-  { id: 'other', name: '其他', color: '#909399', count: 99 }
+  { id: 'wind', name: '风电', color: '#0088ff', count: 1136 },
+  { id: 'groundPv', name: '地面光伏', color: '#f5a623', count: 1025 }
 ]
 
 // 排名维度基数（rankingType → 数量级，模拟各维度数值差异）
@@ -144,7 +142,7 @@ function buildMapProject(province, seed) {
   const nat = [0, 1, 1, null][seed % 4]
   const comp = nat === 1 ? [0, 1, null][seed % 3] : null
   // 行业名与 CATEGORIES 严格一致（行业筛选按名称匹配）
-  const industries = ['能源电力', '节能环保', '智慧能源', '绿色交通', '其他']
+  const industries = ['风电', '地面光伏']
   return {
     projectName: `${province.name}${seed % 2 === 0 ? '风电' : '光伏'}项目${seed}号`,
     projectCode: `PJ${province.code}${String(seed).padStart(3, '0')}`,
@@ -270,7 +268,7 @@ function ok(data) {
   return { code: 200, msg: 'success', data }
 }
 
-// 行业入参归一：接口只收数组（如 ["能源电力","其他"]，空数组=全部），
+// 行业入参归一：接口只收数组（如 ["风电","地面光伏"]，空数组=全部），
 // 这里同时兼容历史字符串形态（JSON 数组串 / 逗号串），统一输出为字符串数组
 function parseIndustry(raw) {
   if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean)
@@ -298,10 +296,10 @@ module.exports = [
       // 省份下钻后数值按比例缩小，模拟联动
       const ratio = provinceName ? 0.08 : 1
 
-      // 行业基数（对齐原型：能源电力 1136 / 节能环保 1025 / 智慧能源 534 / 绿色交通 261 / 其他 19）
-      const industryCounts = CATEGORIES.map((c, i) => ({
+      // 行业基数取 CATEGORIES.count，省份下钻按比例缩小
+      const industryCounts = CATEGORIES.map(c => ({
         industry: c.name,
-        projectCount: Math.round([1136, 1025, 534, 261, 19][i] * ratio)
+        projectCount: Math.round(c.count * ratio)
       }))
       const totalCount = industryCounts.reduce((sum, item) => sum + item.projectCount, 0)
 
@@ -497,7 +495,7 @@ module.exports = [
           nonStandardDetail: {
             projectName: `${province.name}东方低碳综合能源非标项目${tail}号`,
             projectCode: code,
-            projectType: '能源电力',
+            projectType: '风电',
             actualController: `${province.name}市百色电力有限公司`,
             accessMethod: String(tail % 3 + 1), // 1自动 2手动 3接入
             productionTypes: String(tail1 % 3), // 生产及预警：0正常运行 1顺歌运行 2预警运行
@@ -513,7 +511,7 @@ module.exports = [
         projectType: 'POWER',
         nonStandardDetail: null,
         powerGenerationDetail: {
-          projectName: `${province.name}${tail % 4 === 0 ? '风电' : '光伏'}项目${tail}号`,
+          projectName: `${province.name}${tail % 4 === 0 ? '风电' : '地面光伏'}项目${tail}号`,
           projectCode: code,
           actualController: `${province.name}市百色电力有限公司`,
           capacity: String(randomInt(500, 3000, tail2)),
