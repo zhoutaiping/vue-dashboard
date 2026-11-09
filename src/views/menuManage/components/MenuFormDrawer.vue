@@ -1,11 +1,13 @@
 <template>
-  <!-- 新增 / 编辑抽屉：表单逻辑独立成组件，父页面只负责列表与开合 -->
+  <!-- 新增 / 编辑抽屉：表单逻辑独立成组件，父页面只负责列表与开合。
+       element-ui 的 Drawer 用 wrapper-closable 控制点击遮罩是否关闭，
+       close-on-click-modal 是 Dialog 的属性、在 Drawer 上无效，不能用来防止误关 -->
   <el-drawer
     :visible.sync="drawerVisible"
     direction="rtl"
     size="560px"
     :show-close="false"
-    :close-on-click-modal="false"
+    :wrapper-closable="false"
     append-to-body
     custom-class="menu-manage-drawer"
   >
