@@ -353,6 +353,13 @@ export default {
     }
   },
   beforeDestroy() {
+    // 先打销毁标记并断开容器观察：ResizeObserver 已排队的回调仍会执行一次，
+    // 此时容器宽高为 0，继续 chart.resize() 会让 ECharts geo 拿到空变换矩阵而抛错
+    this._mapDestroyed = true
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect()
+      this.resizeObserver = null
+    }
     if (this.unpatchPointer) {
       this.unpatchPointer()
       this.unpatchPointer = null
@@ -360,10 +367,6 @@ export default {
     if (this._maskTimer) {
       clearTimeout(this._maskTimer)
       this._maskTimer = null
-    }
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect()
-      this.resizeObserver = null
     }
     this.unbindWrapEvents()
     this.unbindFullscreen()
@@ -383,7 +386,10 @@ export default {
     },
     // 覆盖 resize mixin：容器尺寸变化后除了重绘，还要重排用 px 定位的颜色图例
     resize() {
-      if (!this.chart) return
+      const el = this.$refs.chart
+      // 组件销毁过程 / 容器已被移除（宽高为 0）时不能再 resize：
+      // ECharts 会在零尺寸下重建 geo 坐标系，内部变换矩阵为 null 直接抛错
+      if (this._mapDestroyed || !this.chart || !el || !el.clientWidth || !el.clientHeight) return
       // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
       if (this.chartDpr !== getChartDpr()) {
         this.chart.dispose()
@@ -682,7 +688,7 @@ export default {
       }
     },
     renderOption() {
-      if (!this.chart) return
+      if (this._mapDestroyed || !this.chart) return
       // GeoJSON 异步加载未完成时（省地图尚未注册）先渲染全国，避免 setOption 使用未注册的 map 名报错
       const mapName = this.mapKey !== 'china' && this.mapCache[this.mapKey] ? this.mapKey : 'china'
       const values = (this.provinceData || []).map(d => Number(d.value) || 0)
@@ -881,7 +887,9 @@ export default {
     // 地图默认自适应放大：按地图实际绘制包围盒把主图缩放到容器填充率（原型默认铺满）。
     // 不做这一步时 zoom 固定 0.8，宽屏/窄屏/全屏下地图都缩在中部、四周留大片空白
     fitMapZoom() {
-      if (!this.chart || this._fitting) return
+      const el = this.$refs.chart
+      // 零尺寸容器下 setOption 会让 geo 重算变换失败，直接跳过本次自适应
+      if (this._mapDestroyed || !this.chart || this._fitting || !el || !el.clientWidth || !el.clientHeight) return
       // 按 id 找主图模型：getComponent 的第二个参数只认下标，这里遍历更稳
       let geoModel = null
       this.chart.getModel().eachComponent('geo', model => {
@@ -1002,7 +1010,12 @@ export default {
     bindFullscreen() {
       this._onFsChange = () => {
         this.isFullscreen = !!document.fullscreenElement
-        this.$nextTick(() => { if (this.chart) this.chart.resize() })
+        this.$nextTick(() => {
+          const el = this.$refs.chart
+          // 退出全屏瞬间容器可能还是 0 尺寸，跳过这次 resize，避免 geo 变换矩阵为空
+          if (this._mapDestroyed || !this.chart || !el || !el.clientWidth || !el.clientHeight) return
+          this.chart.resize()
+        })
       }
       document.addEventListener('fullscreenchange', this._onFsChange)
     },

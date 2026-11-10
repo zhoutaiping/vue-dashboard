@@ -1,0 +1,5 @@
+{
+  "behaviorBatchUrl": "/pm2/api/projectService/behavior/batch",
+  "userBehaviorBatchUrl": "/pm2/api/userService/behavior/batch",
+  "dataSource": "PC"
+}

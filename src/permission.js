@@ -5,6 +5,7 @@ import NProgress from 'nprogress' // progress bar
 import 'nprogress/nprogress.css' // progress bar style
 import { getToken } from '@/utils/auth' // get token from cookie
 import getPageTitle from '@/utils/get-page-title'
+import tracker from '@/utils/tracker'
 
 NProgress.configure({ showSpinner: false }) // NProgress Configuration
 
@@ -68,7 +69,27 @@ router.beforeEach(async(to, from, next) => {
   }
 })
 
-router.afterEach(() => {
+// 路由守卫埋点：仅 meta.tracker 为 true 的页面上报「进入」
+// addRoutes 后 next({ ...to, replace: true }) 会让 afterEach 再走一次，做短时去重
+let lastTracked = null
+router.afterEach(to => {
   // finish progress bar
   NProgress.done()
+  if (!to.meta || !to.meta.tracker) return
+  const key = to.fullPath || to.path
+  const now = Date.now()
+  if (lastTracked && lastTracked.key === key && now - lastTracked.time < 500) return
+  lastTracked = { key: key, time: now }
+  const title = to.meta.title || to.name || ''
+  tracker.sendTracker({
+    actionDescription: `进入${title}`,
+    actionType: '进入',
+    behaviorType: '页面',
+    dataSource: 'PC',
+    firstLevelMenu: `${to.meta.firstLevelMenu || ''}`,
+    projectCode: '',
+    requestBody: '',
+    screenName: '',
+    secondLevelMenu: `${title}`
+  })
 })

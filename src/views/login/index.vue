@@ -75,6 +75,7 @@
 
 <script>
 import { validUsername } from '@/utils/validate'
+import tracker from '@/utils/tracker'
 import SocialSign from './components/SocialSignin'
 
 export default {
@@ -158,6 +159,20 @@ export default {
           this.loading = true
           this.$store.dispatch('user/login', this.loginForm)
             .then(() => {
+              // 埋点账号：tracker 每次从 localStorage.userAccount 实时读取
+              localStorage.setItem('userAccount', this.loginForm.username)
+              // 登录成功埋点（目标项目是自动登录，这里对应账号密码登录）
+              tracker.sendTracker({
+                actionDescription: '登录',
+                actionType: '登录',
+                behaviorType: '页面',
+                dataSource: 'PC',
+                firstLevelMenu: '登录页',
+                projectCode: '',
+                requestBody: '',
+                screenName: '登录成功',
+                secondLevelMenu: '登录页'
+              })
               this.$router.push({ path: this.redirect || '/', query: this.otherQuery })
               this.loading = false
             })

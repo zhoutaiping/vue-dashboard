@@ -7,6 +7,7 @@ const article = require('./article')
 const search = require('./remote-search')
 const homeOverview = require('./homeOverview')
 const menuManage = require('./menuManage')
+const tracker = require('./tracker')
 
 const mocks = [
   ...user,
@@ -14,7 +15,8 @@ const mocks = [
   ...article,
   ...search,
   ...homeOverview,
-  ...menuManage
+  ...menuManage,
+  ...tracker
 ]
 
 // for front mock
