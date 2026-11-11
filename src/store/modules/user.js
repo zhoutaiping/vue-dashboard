@@ -81,6 +81,9 @@ const actions = {
         removeToken()
         resetRouter()
 
+        // 清空当前人员菜单，避免切换账号后残留上一人的权限
+        dispatch('menu/resetCurrentMenu', null, { root: true })
+
         // reset visited views and cached views
         // to fixed https://github.com/PanJiaChen/vue-element-admin/issues/2485
         dispatch('tagsView/delAllViews', null, { root: true })
@@ -93,11 +96,12 @@ const actions = {
   },
 
   // remove token
-  resetToken({ commit }) {
+  resetToken({ commit, dispatch }) {
     return new Promise(resolve => {
       commit('SET_TOKEN', '')
       commit('SET_ROLES', [])
       removeToken()
+      dispatch('menu/resetCurrentMenu', null, { root: true })
       resolve()
     })
   },

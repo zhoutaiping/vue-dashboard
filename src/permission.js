@@ -6,6 +6,7 @@ import 'nprogress/nprogress.css' // progress bar style
 import { getToken } from '@/utils/auth' // get token from cookie
 import getPageTitle from '@/utils/get-page-title'
 import tracker from '@/utils/tracker'
+import { resolveTrackerMenuFields } from '@/utils/menu-tracker'
 
 NProgress.configure({ showSpinner: false }) // NProgress Configuration
 
@@ -36,6 +37,14 @@ router.beforeEach(async(to, from, next) => {
           // get user info
           // note: roles must be a object array! such as: ['admin'] or ,['developer','editor']
           const { roles } = await store.dispatch('user/getInfo')
+
+          // 登录加载页面时请求当前人员菜单权限接口并存入 store
+          // 取数失败不阻断登录：本阶段仍使用静态路由，避免接口异常导致白屏
+          try {
+            await store.dispatch('menu/fetchCurrentMenu')
+          } catch (error) {
+            console.warn('[menu] 当前菜单加载失败，保留静态路由', error)
+          }
 
           // generate accessible routes map based on roles
           const accessRoutes = await store.dispatch('permission/generateRoutes', roles)
@@ -80,16 +89,21 @@ router.afterEach(to => {
   const now = Date.now()
   if (lastTracked && lastTracked.key === key && now - lastTracked.time < 500) return
   lastTracked = { key: key, time: now }
-  const title = to.meta.title || to.name || ''
+  // 页面标题、一级 / 二级菜单名称统一优先取登录时格式化后的接口菜单数据，未命中才回退静态路由 meta
+  const menuFields = resolveTrackerMenuFields(store.getters.currentMenus, to) || {
+    firstLevelMenu: to.meta.firstLevelMenu || '',
+    secondLevelMenu: to.meta.title || to.name || ''
+  }
+  const title = menuFields.secondLevelMenu || to.meta.title || to.name || ''
   tracker.sendTracker({
     actionDescription: `进入${title}`,
     actionType: '进入',
     behaviorType: '页面',
     dataSource: 'PC',
-    firstLevelMenu: `${to.meta.firstLevelMenu || ''}`,
+    firstLevelMenu: `${menuFields.firstLevelMenu || ''}`,
     projectCode: '',
     requestBody: '',
     screenName: '',
-    secondLevelMenu: `${title}`
+    secondLevelMenu: `${menuFields.secondLevelMenu || ''}`
   })
 })

@@ -37,7 +37,7 @@ function mockXHR() {
     this.proxy_send(...arguments)
   }
 
-  function XHR2ExpressReqWrap(respond) {
+  function XHR2ExpressReqWrap(respond, raw) {
     return function(options) {
       let result = null
       if (respond instanceof Function) {
@@ -45,18 +45,19 @@ function mockXHR() {
         // https://expressjs.com/en/4x/api.html#req
         result = respond({
           method: type,
-          body: JSON.parse(body),
+          body: body ? JSON.parse(body) : {},
           query: param2Obj(url)
         })
       } else {
         result = respond
       }
-      return Mock.mock(result)
+      // raw 为 true 时原样返回，避免真实 DTO 中的 @/view/... 被 Mock.js 当模板解析
+      return raw ? result : Mock.mock(result)
     }
   }
 
   for (const i of mocks) {
-    Mock.mock(new RegExp(i.url), i.type || 'get', XHR2ExpressReqWrap(i.response))
+    Mock.mock(new RegExp(i.url), i.type || 'get', XHR2ExpressReqWrap(i.response, i.raw))
   }
 }
 

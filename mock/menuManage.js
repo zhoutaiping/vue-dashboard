@@ -23,314 +23,86 @@
  *   children   子节点集合
  */
 
-// 内存数据：新增/编辑/删除/排序都改这里，刷新页面后仍然生效（重启 dev server 恢复初始值）
+// 内存数据：按 src/router/index.js 里实际启用的页面模拟，字段与接口 DTO 一致
+// 一级目录名对应静态路由 meta.firstLevelMenu，页面 menuCode 对应路由 path，
+// url 指向项目里真实的组件文件；真实接口为 @/view/xxx/index.vue，mock 省略 @ 前缀，
+// 避免 Mock.js 把 @xxx 当成数据模板占位符（GET /system/menu/tree 仍走 Mock.mock）
+// 新增/编辑/删除/排序都改这里，刷新页面后仍然生效（重启 dev server 恢复初始值）
 const MENU_TREE = [
   {
     id: 101,
     pid: 0,
     parentCode: '0',
     code: 'RAA',
-    name: '现货概览',
-    menuCode: 'GanSu/Home',
+    name: '工作台',
+    menuCode: '',
     meantype: 'menu',
-    icon: 'icon-shouye',
-    url: 'views/GanSu/Home/index.vue',
+    icon: 'dashboard',
+    url: '',
     level: 1,
+    level0: 1,
     orderNum: 1,
     regular: 1,
     deleteFlag: 0,
-    children: []
+    cacheFlag: 0,
+    sidebarShow: 0,
+    children: [
+      {
+        id: 102,
+        pid: 101,
+        parentCode: 'RAA',
+        code: 'RAA01',
+        name: 'Dashboard',
+        menuCode: '/dashboard',
+        meantype: 'menu',
+        icon: 'dashboard',
+        url: 'views/dashboard/index.vue',
+        level: 2,
+        level0: 2,
+        orderNum: 1,
+        regular: 1,
+        deleteFlag: 0,
+        cacheFlag: 0,
+        sidebarShow: 0,
+        children: []
+      }
+    ]
   },
   {
-    id: 142,
+    id: 201,
     pid: 0,
     parentCode: '0',
     code: 'RAB',
-    name: '行情看板',
-    menuCode: 'GanSu/MarketDashboard',
+    name: '首页总览',
+    menuCode: '',
     meantype: 'menu',
-    icon: 'icon-hangqingkanban',
+    icon: 'dashboard',
     url: '',
     level: 1,
-    orderNum: 39,
+    level0: 1,
+    orderNum: 2,
     regular: 1,
     deleteFlag: 0,
+    cacheFlag: 0,
+    sidebarShow: 0,
     children: [
       {
-        id: 143,
-        pid: 142,
+        id: 202,
+        pid: 201,
         parentCode: 'RAB',
         code: 'RAB01',
-        name: '气象面板',
-        menuCode: 'GanSu/MarketDashboard/MeteorologicalPanel',
+        name: '首页总览',
+        menuCode: '/homeOverview',
         meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/MarketDashboard/MeteorologicalPanel/index.vue',
+        icon: 'dashboard',
+        url: 'views/homePage/overview/index.vue',
         level: 2,
-        orderNum: 43,
+        level0: 2,
+        orderNum: 1,
         regular: 1,
         deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 144,
-        pid: 142,
-        parentCode: 'RAB',
-        code: 'RAB02',
-        name: '市场供需',
-        menuCode: 'GanSu/MarketDashboard/MarketSupplyDemand',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/MarketDashboard/MarketSupplyDemand/index.vue',
-        level: 2,
-        orderNum: 44,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 145,
-        pid: 142,
-        parentCode: 'RAB',
-        code: 'RAB03',
-        name: '供需对比',
-        menuCode: 'GanSu/MarketDashboard/SupplyDemandComparison',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/MarketDashboard/SupplyDemandComparison/index.vue',
-        level: 2,
-        orderNum: 45,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      }
-    ]
-  },
-  {
-    id: 147,
-    pid: 0,
-    parentCode: '0',
-    code: 'RAC',
-    name: '数据预测',
-    menuCode: 'GanSu/DataForecast',
-    meantype: 'menu',
-    icon: 'icon-shujuyuce',
-    url: '',
-    level: 1,
-    orderNum: 46,
-    regular: 1,
-    deleteFlag: 0,
-    children: [
-      {
-        id: 148,
-        pid: 147,
-        parentCode: 'RAC',
-        code: 'RAC01',
-        name: '发电量预测',
-        menuCode: 'GanSu/DataForecast/PowerForecast',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/DataForecast/PowerForecast/index.vue',
-        level: 2,
-        orderNum: 47,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 149,
-        pid: 147,
-        parentCode: 'RAC',
-        code: 'RAC02',
-        name: '负荷预测',
-        menuCode: 'GanSu/DataForecast/LoadForecast',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/DataForecast/LoadForecast/index.vue',
-        level: 2,
-        orderNum: 48,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      }
-    ]
-  },
-  {
-    id: 150,
-    pid: 0,
-    parentCode: '0',
-    code: 'RAD',
-    name: '现货复盘',
-    menuCode: 'GanSu/SpotInventoryReview',
-    meantype: 'menu',
-    icon: 'icon-xianhuofupan',
-    url: '',
-    level: 1,
-    orderNum: 49,
-    regular: 1,
-    deleteFlag: 0,
-    children: [
-      {
-        id: 151,
-        pid: 150,
-        parentCode: 'RAD',
-        code: 'RAD01',
-        name: '月度复盘',
-        menuCode: 'GanSu/SpotInventoryReview/MonthlyReview',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/SpotInventoryReview/MonthlyReview/index.vue',
-        level: 2,
-        orderNum: 50,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 152,
-        pid: 150,
-        parentCode: 'RAD',
-        code: 'RAD02',
-        name: '交易日复盘',
-        menuCode: 'GanSu/SpotInventoryReview/TradingDayReview',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/SpotInventoryReview/TradingDayReview/index.vue',
-        level: 2,
-        orderNum: 51,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      }
-    ]
-  },
-  {
-    id: 103,
-    pid: 0,
-    parentCode: '0',
-    code: 'RAE',
-    name: '公开数据',
-    menuCode: 'GanSu/PublicData',
-    meantype: 'menu',
-    icon: 'icon-gongkaishuju',
-    url: '',
-    level: 1,
-    orderNum: 52,
-    regular: 1,
-    deleteFlag: 0,
-    children: [
-      {
-        id: 104,
-        pid: 103,
-        parentCode: 'RAE',
-        code: 'RAE01',
-        name: '政策文件',
-        menuCode: 'GanSu/PublicData/PolicyDocument',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/PublicData/PolicyDocument/index.vue',
-        level: 2,
-        orderNum: 53,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 105,
-        pid: 103,
-        parentCode: 'RAE',
-        code: 'RAE02',
-        name: '市场公告',
-        menuCode: 'GanSu/PublicData/MarketNotice',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/PublicData/MarketNotice/index.vue',
-        level: 2,
-        orderNum: 54,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      }
-    ]
-  },
-  {
-    id: 174,
-    pid: 0,
-    parentCode: '0',
-    code: 'RAF',
-    name: '中长期决策',
-    menuCode: 'GanSu/MediumLongDecision',
-    meantype: 'menu',
-    icon: 'icon-zhongchangqi',
-    url: '',
-    level: 1,
-    orderNum: 55,
-    regular: 1,
-    deleteFlag: 0,
-    children: [
-      {
-        id: 175,
-        pid: 174,
-        parentCode: 'RAF',
-        code: 'RAF01',
-        name: '年度交易',
-        menuCode: 'GanSu/MediumLongDecision/AnnualTrade',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/MediumLongDecision/AnnualTrade/index.vue',
-        level: 2,
-        orderNum: 56,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      },
-      {
-        id: 176,
-        pid: 174,
-        parentCode: 'RAF',
-        code: 'RAF02',
-        name: '月度交易',
-        menuCode: 'GanSu/MediumLongDecision/MonthlyTrade',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/MediumLongDecision/MonthlyTrade/index.vue',
-        level: 2,
-        orderNum: 57,
-        regular: 1,
-        deleteFlag: 0,
-        children: []
-      }
-    ]
-  },
-  {
-    id: 134,
-    pid: 0,
-    parentCode: '0',
-    code: 'RAG',
-    name: '私有数据',
-    menuCode: 'GanSu/PrivateData',
-    meantype: 'menu',
-    icon: 'icon-siyoushuju',
-    url: '',
-    level: 1,
-    orderNum: 58,
-    regular: 1,
-    deleteFlag: 0,
-    children: [
-      {
-        id: 135,
-        pid: 134,
-        parentCode: 'RAG',
-        code: 'RAG01',
-        name: '自有场站',
-        menuCode: 'GanSu/PrivateData/OwnStation',
-        meantype: 'menu',
-        icon: null,
-        url: 'views/GanSu/PrivateData/OwnStation/index.vue',
-        level: 2,
-        orderNum: 59,
-        regular: 1,
-        deleteFlag: 0,
+        cacheFlag: 0,
+        sidebarShow: 0,
         children: []
       }
     ]
@@ -339,32 +111,73 @@ const MENU_TREE = [
     id: 301,
     pid: 0,
     parentCode: '0',
-    code: 'RAH',
-    name: '资料库',
-    menuCode: 'Database',
+    code: 'RAC',
+    name: '系统管理',
+    menuCode: '',
     meantype: 'menu',
-    icon: 'icon-ziliaoku',
-    url: 'views/Database/index.vue',
+    icon: 'tree',
+    url: '',
     level: 1,
-    orderNum: 60,
+    level0: 1,
+    orderNum: 3,
     regular: 1,
     deleteFlag: 0,
+    cacheFlag: 0,
+    sidebarShow: 0,
     children: [
       {
         id: 302,
         pid: 301,
-        parentCode: 'RAH',
-        code: 'RAH01',
-        name: '文档库',
-        menuCode: 'Database/Document',
+        parentCode: 'RAC',
+        code: 'RAC01',
+        name: '菜单管理',
+        menuCode: '/menuManage',
         meantype: 'menu',
-        icon: null,
-        url: 'views/Database/Document/index.vue',
+        icon: 'tree',
+        url: 'views/menuManage/index.vue',
         level: 2,
-        orderNum: 61,
+        level0: 2,
+        orderNum: 1,
         regular: 1,
         deleteFlag: 0,
-        children: []
+        cacheFlag: 0,
+        sidebarShow: 0,
+        children: [
+          {
+            id: 303,
+            pid: 302,
+            parentCode: 'RAC01',
+            code: 'RAC01:B1',
+            name: '新增',
+            meantype: 'button',
+            icon: '',
+            menuCode: '',
+            url: '',
+            level: 3,
+            level0: 3,
+            orderNum: 1,
+            regular: 1,
+            deleteFlag: 0,
+            children: []
+          },
+          {
+            id: 304,
+            pid: 302,
+            parentCode: 'RAC01',
+            code: 'RAC01:B2',
+            name: '导出',
+            meantype: 'button',
+            icon: '',
+            menuCode: '',
+            url: '',
+            level: 3,
+            level0: 3,
+            orderNum: 2,
+            regular: 1,
+            deleteFlag: 0,
+            children: []
+          }
+        ]
       }
     ]
   }
@@ -403,7 +216,8 @@ function toDTO(node) {
     orderNum: Number(node.orderNum) || 0,
     // 0/1 标志位：历史数据缺省按 0（缓存 / 显示）处理
     cacheFlag: node.cacheFlag === 1 ? 1 : 0,
-    sidebarShow: node.sidebarShow === 1 ? 1 : 0,
+    // 真实接口可能下发字符串 '1'，统一按数值判定隐藏，避免 DTO 环节把隐藏标志抹成 0
+    sidebarShow: Number(node.sidebarShow) === 1 ? 1 : 0,
     regular: Number(node.regular) === 0 ? 0 : 1,
     deleteFlag: Number(node.deleteFlag) || 0,
     children
@@ -582,6 +396,18 @@ function filterTree(list, keyword) {
 }
 
 module.exports = [
+  // 登录人员当前拥有的目录、页面菜单及按钮权限：POST /system/menu/current-menu
+  // 请求：form-urlencoded，body 为空、无必填参数；身份由 authorization: Bearer <token> 携带；
+  //       文档中的 groupId / userId / name 等均为非必填 query，本接口按登录态直接返回该用户可见菜单
+  // 响应：{ code: 200, msg: 'success', data: [树形菜单] }，字段与 GET /system/menu/tree 完全一致
+  // 数据源直接复用本文件的 MENU_TREE：菜单管理页新增/编辑/删除/排序后，这里立即生效，避免两套菜单数据不一致
+  // raw: true —— 真实 DTO 的 url 形如 @/view/xxx/index.vue，Mock.js 会把 @xxx 当数据模板占位符并报 500
+  {
+    url: '/system/menu/current-menu',
+    type: 'post',
+    raw: true,
+    response: () => ok(filterTree(MENU_TREE, ''))
+  },
   // 菜单树列表：GET /system/menu/tree?keyword=
   {
     url: '/system/menu/tree',

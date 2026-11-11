@@ -260,7 +260,7 @@ export default {
     // meantype 只有 menu / button；menu 再按是否有子级区分目录与页面菜单
     meantypeText(row) {
       if (this.menutypeOf(row) === 'button') return '按钮'
-      return (row.children || []).length ? '目录' : '菜单'
+      return (row.children || []).length && row.children.some(i => i.meantype === 'menu') ? '目录' : '菜单'
     },
     meantypeTag(row) {
       if (this.menutypeOf(row) === 'button') return 'warning'

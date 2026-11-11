@@ -10,7 +10,7 @@ function registerRoutes(app) {
   let mockLastIndex
   const { mocks } = require('./index.js')
   const mocksForServer = mocks.map(route => {
-    return responseFake(route.url, route.type, route.response)
+    return responseFake(route.url, route.type, route.response, route.raw)
   })
   for (const mock of mocksForServer) {
     app[mock.type](mock.url, mock.response)
@@ -32,13 +32,15 @@ function unregisterRoutes() {
 }
 
 // for mock server
-const responseFake = (url, type, respond) => {
+const responseFake = (url, type, respond, raw) => {
   return {
     url: new RegExp(`${process.env.VUE_APP_BASE_API}${url}`),
     type: type || 'get',
     response(req, res) {
       console.log('request invoke:' + req.path)
-      res.json(Mock.mock(respond instanceof Function ? respond(req, res) : respond))
+      const result = respond instanceof Function ? respond(req, res) : respond
+      // raw 为 true 时原样返回，避免真实 DTO 中的 @/view/... 被 Mock.js 当模板解析
+      res.json(raw ? result : Mock.mock(result))
     }
   }
 }
