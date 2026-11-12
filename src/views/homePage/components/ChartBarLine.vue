@@ -41,6 +41,12 @@ export default {
     }
   },
   computed: {
+    // 报表按连续月份（yyyy-MM）返回：X 轴超过 12 项即时间跨度超过一年，
+    // 组件内自动挂 dataZoom，两张报表调用处无需各自配置
+    needsDataZoom() {
+      const monthsPerYear = 12
+      return (this.xData || []).length > monthsPerYear
+    },
     // 渲染源：所有影响渲染的 props 汇总，统一监听，避免遗漏（如仅 yAxisNames/unit/colors 变化不重绘）
     renderSource() {
       return {
@@ -339,11 +345,39 @@ export default {
             style: { text: unitText, fill: '#08f', fontSize: 12, lineHeight: 18 }
           }]
           : undefined,
+        // 时间跨度超过一年：X 轴挂 dataZoom。inside 负责滚轮缩放/拖拽平移，
+        // slider 提供可见拖动窗口；两者共用同一范围。外部 extraOption.dataZoom 可整体覆盖
+        dataZoom: this.needsDataZoom ? [
+          {
+            type: 'inside',
+            xAxisIndex: 0,
+            start: 0,
+            end: 100,
+            zoomOnMouseWheel: true,
+            moveOnMouseMove: true,
+            moveOnMouseWheel: false
+          },
+          {
+            type: 'slider',
+            xAxisIndex: 0,
+            start: 0,
+            end: 100,
+            bottom: 2,
+            height: 14,
+            borderColor: 'transparent',
+            backgroundColor: '#f0f2f5',
+            fillerColor: 'rgba(0, 136, 255, 0.16)',
+            handleSize: '80%',
+            handleStyle: { color: '#0088ff', borderColor: '#0088ff' },
+            showDetail: false
+          }
+        ] : [],
         // 顶部留白：图例 18 + 轴名一行 22（无轴名时不占这一行，把高度还给绘图区）
         grid: {
           left: 8,
           right: hasSecondAxis ? 8 : 12,
-          bottom: 4,
+          // 启用 dataZoom 时给底部滑块留高度，避免压住 X 轴月份标签
+          bottom: this.needsDataZoom ? 26 : 4,
           top: (this.showLegend ? 36 : 16) + (hasAxisName ? 8 : 0),
           containLabel: true
         },
