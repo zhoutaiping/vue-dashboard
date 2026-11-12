@@ -60,10 +60,10 @@ export function queryRegionRanking(data) {
 // 返回 data：
 //   全国请求（provinceName 为空）→ 省份数组：[{ avgSettlementPrice, avgWindSettlementPrice, avgPvSettlementPrice,
 //     benchmarkPrice, projectList: [{ projectName, projectCode, provinceName, cityName, longitude, latitude,
-//     natProject, compCatalog, pvSettlementPrice, windSettlementPrice }] }]
+//     natProject, compCatalog, projectColor, pvSettlementPrice, windSettlementPrice }] }]
 //   省份请求 → 单个同结构对象（当前省）
-// projectList 分类口径：
-//   无补贴：natProject != 1；已补贴：natProject = 1；合规：natProject = 1 && compCatalog = 1（优先判定）
+// projectList 分类口径：以新字段 projectColor 为准（蓝色=无补贴、绿色=有补贴，只保留两类）；
+//   natProject/compCatalog 为兼容字段，projectColor 缺失时按 natProject=1 兜底为有补贴
 export function queryMapDisplay(data) {
   return postRequest('/largeScreen/mapDisplay', data)
 }
@@ -114,7 +114,8 @@ export function getProjectList(params) {
 // 返回 data:
 //   - projectType: POWER-发电项目, NON_STANDARD-非标项目（两类项目展示字段不同）
 //   - powerGenerationDetail（POWER）: { projectName, projectCode, actualController, capacity 装机容量,
-//       hours 发电利用小时数, editWindPrice 结算电价, subePrice 补贴电价 }
+//       hours 发电利用小时数, settlementPrice 结算电价(兼容 editWindPrice),
+//       spotSettlementPrice Spot结算电价(按项目类型返回风电/光伏电价), subelePrice 补贴电价 }
 //   - nonStandardDetail（NON_STANDARD）: { projectName, projectCode, actualController, accessMethod 接入方式,
 //       productionTypes 生产及预警, productionCapacity 项目规模, platformTransfer 是否平台转发 }
 export function queryProjectDetail(data) {

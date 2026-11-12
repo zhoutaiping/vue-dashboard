@@ -181,7 +181,7 @@ import {
   POINT_FIELD_MAP,
   POINT_CATEGORIES,
   pointCategory,
-  classifyProject,
+  classifyProjectColor,
   ENERGY_LABELS,
   OVERVIEW_METRICS,
   PIE_FIELD_MAP,
@@ -275,7 +275,7 @@ export default {
       // 状态筛选（显示运营/显示在建）默认全选：初始勾选态与原型一致；
       // 全选与"未选"等价（均展示全量，接口 status=3），全部取消 = 展示全量（原型注5）
       buildFilter: ['运营', '在建'],
-      subsidyFilter: ['无补贴', '已补贴', '合规清单'],
+      subsidyFilter: SUBSIDY_FILTERS.slice(),
       priceType: 'wind',
       // 行业「全不选」空态标记（原型注4：全部取消时页面数据清空，仅保留筛选器可操作）。
       // 必须单独用标记而不是靠数组：query.categories 的空数组语义是「全部」（industry 传空取全量），
@@ -303,7 +303,7 @@ export default {
       // 地图电价数据（mapDisplay/price 返回）：[{ name: 省名/地市名, _short: 地图区域名, fields: 电价字段 }]
       // 只提供电价（着色/热力/浮层），点位与项目数仍来自 provinceGroups
       priceGroups: [],
-      // 地图点位分类（补贴属性三分类：无补贴/已补贴/合规清单）
+      // 地图点位分类（补贴属性两分类：无补贴/已补贴，由 projectColor 判定）
       pointCategories: POINT_CATEGORIES,
       // 省会标记点 + 图标
       capitals: PROVINCE_CAPITALS,
@@ -573,13 +573,12 @@ export default {
       return CATEGORIES.map(c => ({ key: c.id, label: c.name, color: c.color }))
     },
     // 地图点位：provinceGroups.projectList 平铺归一化
-    // 分类按业务口径推导：合规 natProject=1 && compCatalog=1（优先）；已补贴 natProject=1；其余无补贴 natProject!=1
+    // 分类以接口 projectColor 为准：蓝色=无补贴、绿色=已补贴，只保留两类
     points() {
       const list = []
       this.provinceGroups.forEach(group => {
         (group.projectList || []).forEach(item => {
-          const catId = classifyProject(item.natProject, item.compCatalog)
-          const cat = pointCategory(catId)
+          const cat = pointCategory(classifyProjectColor(item.projectColor, item))
           list.push(Object.assign({}, item, {
             id: item.projectCode,
             name: item.projectName,
@@ -587,7 +586,7 @@ export default {
             lng: toCoordNumber(item.longitude),
             lat: toCoordNumber(item.latitude),
             category: cat.id,
-            // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴/合规清单）
+            // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴）
             categoryName: cat.name,
             subsidy: cat.name,
             // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），

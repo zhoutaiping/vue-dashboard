@@ -20,20 +20,18 @@ import fullscreen2 from '../fullscreen-2.svg'
 
 import station1 from '../station-1.png'
 import station2 from '../station-2.png'
-import station3 from '../station-3.png'
 
 export const fullscreenIcon = {
   1: fullscreen1, // 全屏
   2: fullscreen2 // 退出
 }
 
-// 地图点位 / 右下角图例图标：station 三色图标（蓝=无补贴、橙=已补贴、绿=合规清单，与 POINT_CATEGORIES 一一对应）
-// 注意：图标颜色是画在图片里的，文件名与业务分类并不对应（station-2 是绿色、station-3 是橙色），
+// 地图点位 / 右下角图例图标：蓝=无补贴(station-1)、绿=已补贴(station-2)，与 POINT_CATEGORIES 一一对应
+// 注意：图标颜色是画在图片里的，文件名与业务分类并不对应（station-2 是绿色），
 // 这里按图片实际颜色映射，保证打点、图例、弹窗图钉三者同色
 export const station_type = {
   '无补贴': station1, // 蓝
-  '已补贴': station3, // 橙
-  '合规清单': station2 // 绿
+  '已补贴': station2 // 绿
 }
 
 // 行业定义（真实接口 industry 只有两种：风电、地面光伏，支持多选）
@@ -91,11 +89,10 @@ export const POINT_FIELD_MAP = {
   category: 'category'
 }
 
-// 地图点位三分类（补贴属性，key 与接口 natProject/compCatalog 推导结果一致）
+// 地图点位两分类（接口 projectColor：蓝色=无补贴、绿色=有补贴）
 export const POINT_CATEGORIES = [
   { id: 'noSubsidy', name: '无补贴', color: '#0088ff' },
-  { id: 'subsidy', name: '已补贴', color: '#f5a623' },
-  { id: 'compliance', name: '合规清单', color: '#2fc25b' }
+  { id: 'subsidy', name: '已补贴', color: '#2fc25b' }
 ]
 
 // 分类 id / 分类名 → 分类定义（color/name/id）
@@ -104,17 +101,26 @@ export function pointCategory(key) {
   return POINT_CATEGORIES.find(c => c.id === key || c.name === key) || POINT_CATEGORIES[0]
 }
 
-// projectList 分类规则（业务口径）：
-//   无补贴：natProject != 1（含 0 / null / 空）
-//   已补贴：natProject = 1
-//   合规：  natProject = 1 && compCatalog = 1
-// 合规与已补贴条件重叠，合规更具体，优先判定（每点只归属一个分类）
-export function classifyProject(natProject, compCatalog) {
-  // 合规：natProject = 1 && compCatalog = 1
-  if (Number(natProject) === 1 && Number(compCatalog) === 1) return 'compliance'
-  // 已补贴：natProject = 1
-  if (Number(natProject) === 1) return 'subsidy'
-  // 无补贴：natProject != 1
+// projectColor 值 → 分类 id：后端枚举/文案变更只改这张表
+// 兼容中文色名、英文名与色值；未识别的值统一按无补贴（蓝色）处理
+export const PROJECT_COLOR_MAP = {
+  '蓝色': 'noSubsidy',
+  blue: 'noSubsidy',
+  '#0088ff': 'noSubsidy',
+  '绿色': 'subsidy',
+  green: 'subsidy',
+  '#2fc25b': 'subsidy'
+}
+
+// mapDisplay.projectList 分类规则：以接口新字段 projectColor 为准，不再用 natProject/compCatalog 推导合规清单
+// 蓝色 → 无补贴；绿色 → 已补贴（原合规清单项目由后端统一返回绿色）
+// projectColor 缺失时回退旧字段 natProject=1 判为已补贴，保证接口灰度期点位仍有颜色
+export function classifyProjectColor(projectColor, item) {
+  const key = String(projectColor == null ? '' : projectColor).trim().toLowerCase()
+  if (PROJECT_COLOR_MAP[key]) return PROJECT_COLOR_MAP[key]
+  // 兼容「绿色(有补贴)」这类带后缀的写法
+  if (key.indexOf('绿') > -1 || key.indexOf('green') > -1) return 'subsidy'
+  if (!key && Number(item && item.natProject) === 1) return 'subsidy'
   return 'noSubsidy'
 }
 
@@ -127,6 +133,18 @@ export const HOVER_FIELDS = [
 
 // 点位悬浮 mini 胶囊（原型：⚡电价 + 项目编号）：valueField 为项目级电价字段
 export const POINT_TIP = { valueField: 'settlementPrice', codeField: 'projectCode' }
+
+// 发电项目详情卡片：结算电价与 Spot 结算电价的差值（展示绝对值 + 涨跌箭头）
+// priceFields：结算电价候选字段（兼容历史 editWindPrice）；spotField：新接口字段，按项目类型返回风电/光伏电价
+// digits：差值小数位；差值 > 0 红色向上、< 0 绿色向下、= 0 灰色无箭头
+export const POINT_PRICE_COMPARE = {
+  priceFields: ['editWindPrice', 'settlementPrice'],
+  spotField: 'spotSettlementPrice',
+  digits: 4,
+  upColor: '#f56c6c',
+  downColor: '#2fc25b',
+  flatColor: '#909399'
+}
 
 // 点位详情（/largeScreen/projectDetail）非标项目枚举文案
 // 发电项目（POWER）与非标项目（NON_STANDARD）卡片展示字段不同（原型交互13）
@@ -272,8 +290,8 @@ export const BUILD_FILTERS = [
   { id: '在建', label: '显示在建' }
 ]
 
-// 地图右下角浮动菜单：补贴属性筛选（多选，key 与 station_type 一致）
-export const SUBSIDY_FILTERS = ['无补贴', '已补贴', '合规清单']
+// 地图右下角浮动菜单：补贴属性筛选（多选，只保留无补贴/已补贴两类，key 与 station_type 一致）
+export const SUBSIDY_FILTERS = ['无补贴', '已补贴']
 
 // 地图左下角浮动菜单：结算电价（单选，可再点取消=不选；默认风电）
 // fields 为候选字段列表（按序取第一个有效值）：真实接口可能返回 avgXxx（null）

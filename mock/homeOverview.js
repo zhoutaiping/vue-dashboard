@@ -134,10 +134,8 @@ function pickCityName(province, seed) {
 }
 
 // 生成地图展示数据（mapDisplay）：每省 = 电价汇总 + 项目列表
-// projectList 分类口径（业务规则）：
-//   无补贴：natProject != 1
-//   有补贴：natProject = 1
-//   合规：  natProject = 1 && compCatalog = 1（优先判定）
+// projectList 分类口径：以 projectColor 为准（蓝色=无补贴、绿色=有补贴），
+// natProject/compCatalog 仅为接口保留字段，不再参与分类（不再有合规清单）
 function buildMapProject(province, seed) {
   const nat = [0, 1, 1, null][seed % 4]
   const comp = nat === 1 ? [0, 1, null][seed % 3] : null
@@ -153,6 +151,7 @@ function buildMapProject(province, seed) {
     latitude: String(province.lat + randomInt(-15, 15, seed) / 10),
     natProject: nat === null ? null : String(nat),
     compCatalog: comp === null ? null : String(comp),
+    projectColor: nat === 1 ? '绿色' : '蓝色', // 蓝色=无补贴、绿色=有补贴
     pvSettlementPrice: String(randomInt(20, 60, seed) / 100),
     windSettlementPrice: String(randomInt(20, 60, seed + 5) / 100),
     // 点位详情卡片字段（原型：点击点位弹出白色卡片）
@@ -506,7 +505,7 @@ module.exports = [
           powerGenerationDetail: null
         })
       }
-      // 发电项目（字段与真实接口一致：capacity/hours/subePrice；editWindPrice 结算电价、rate 达标率为 swagger 补充字段）
+      // 发电项目（兼容历史字段 editWindPrice/subePrice；新增 spotSettlementPrice：按项目类型返回风电/光伏 Spot 结算电价）
       return ok({
         projectType: 'POWER',
         nonStandardDetail: null,
@@ -517,7 +516,8 @@ module.exports = [
           capacity: String(randomInt(500, 3000, tail2)),
           hours: String(randomInt(80, 300, tail3)),
           rate: String(randomInt(70, 99, tail4)),
-          editWindPrice: String(randomInt(20, 60, tail5) / 100),
+          editWindPrice: String(randomInt(1000, 6000, tail5) / 10000), // 结算电价（4 位小数，便于演示差值）
+          spotSettlementPrice: String(randomInt(1000, 6000, tail5 + 9) / 10000), // Spot结算电价
           subePrice: String(randomInt(5, 30, tail1) / 100),
           status: tail % 3 === 0 ? '1' : '2' // 项目状态：1、在建；2、运营（偶数项目 2/3 概率运营）
         }
@@ -608,10 +608,9 @@ module.exports = [
       const seed = 5 + PROVINCES.indexOf(province)
       const group = buildProvinceGroup(province, seed)
       const list = (group.projectList || []).slice(0, 8).map(p => {
-        // 分类口径与地图点位一致：无补贴/有补贴/合规清单
+        // 分类口径与地图点位一致：按 projectColor 只分无补贴/已补贴
         const nat = Number(p.natProject)
-        const comp = Number(p.compCatalog)
-        const categoryName = nat === 1 ? (comp === 1 ? '合规清单' : '有补贴') : '无补贴'
+        const categoryName = p.projectColor === '绿色' ? '已补贴' : '无补贴'
         return {
           id: p.projectCode,
           name: p.projectName,

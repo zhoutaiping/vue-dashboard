@@ -101,7 +101,7 @@
         >
           <span class="echarts-china-map__point-card-label">{{ row.label }}：</span>
           <span :style="{ color: pointCardColor }">{{ row.value }}</span>
-          <span v-if="row.sub" :style="{ color: pointCardColor }">{{ row.sub }}</span>
+          <span v-if="row.sub" :style="{ color: row.subColor || pointCardColor }">{{ row.sub }}</span>
         </div>
         <!-- 详情>>：非标项目固定不展示；发电项目仅状态为运营(status='2')时展示 -->
         <div v-if="pointCardCanShowDetail" class="echarts-china-map__point-card-footer">
@@ -120,7 +120,7 @@ import { getChartDpr } from '../uiScale'
 import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
-import { REGION_PRICE_COMPARE, pointCategory, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
+import { REGION_PRICE_COMPARE, POINT_PRICE_COMPARE, POINT_TIP, pointCategory, classifyProjectColor, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import { patchZoomPointer } from '../pointer'
 import priceIcon from '../price.png'
 
@@ -229,10 +229,11 @@ export default {
       if (!this.mapCode) return 'china'
       return this.region ? `${this.mapCode}|${this.region}` : this.mapCode
     },
-    // 卡片所属补贴分类：与地图打点、右下角图例同一套口径（POINT_CATEGORIES + classifyProject）
+    // 卡片所属分类：直接用地图 projectList 的 projectColor（蓝色=无补贴、绿色=已补贴），
+    // 不再读点位归一化后的 category/categoryName；颜色仍由 POINT_CATEGORIES 两色决定
     activePointCategory() {
       const raw = (this.activePoint && this.activePoint.raw) || {}
-      return pointCategory(raw.category || raw.categoryName)
+      return pointCategory(classifyProjectColor(raw.projectColor, raw))
     },
     // 卡片主题色（边框 / tag 底色 / 数值与链接文字）：与打点同色
     pointCardColor() {
@@ -294,13 +295,27 @@ export default {
       const capacity = p.capacity !== undefined ? p.capacity : (p.installCapacity !== undefined ? p.installCapacity : raw.capacity)
       const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
       const rate = p.rate !== undefined ? p.rate : raw.rate
-      const settle = p.editWindPrice || p.settlementPrice || raw.settlementPrice
+      // 结算电价优先取详情（兼容历史 editWindPrice），详情无值时回退点位数据
+      const settleRaw = pickPriceValue(p, POINT_PRICE_COMPARE.priceFields)
+      const settle = settleRaw === null ? pickPriceValue(raw, [POINT_TIP.valueField]) : settleRaw
+      // 结算电价 - Spot结算电价：只展示差值绝对值，> 0 向上箭头、< 0 向下箭头、= 0 无箭头
+      // 任一字段缺失或非数值时不渲染括号，避免出现「--（0.0000）」这类空差值
+      const spot = pickPriceValue(p, POINT_PRICE_COMPARE.spotField)
+      let settleSub = ''
+      let settleSubColor = ''
+      if (settle !== null && spot !== null) {
+        const diff = Number(settle) - Number(spot)
+        const arrow = diff > 0 ? '↑' : (diff < 0 ? '↓' : '')
+        settleSub = `（${Math.abs(diff).toFixed(POINT_PRICE_COMPARE.digits)}${arrow}）`
+        settleSubColor = diff > 0 ? POINT_PRICE_COMPARE.upColor
+          : (diff < 0 ? POINT_PRICE_COMPARE.downColor : POINT_PRICE_COMPARE.flatColor)
+      }
       const sube = p.subelePrice || p.subsidyPrice || raw.subsidyPrice
       return [
         { label: '实控人', value: fmt(p.actualController || raw.controller) },
         { label: '装机容量', value: `${fmt(capacity)}kW` },
         { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: rate !== undefined && rate !== null && rate !== '' ? `（达标率：${rate}%）` : '' },
-        { label: '结算电价', value: `${fmt(settle)}元/kWh` },
+        { label: '结算电价', value: `${fmt(settle)}元/kWh`, sub: settleSub, subColor: settleSubColor },
         { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
       ]
     }
@@ -591,7 +606,7 @@ export default {
       return Object.assign({}, provinceGeoJson, { features })
     },
     // 按分类分组为多个 scatter series，每个分类一种颜色
-    // 点位若带补贴属性图标（subsidyIcons = station-1/2/3，蓝=无补贴 / 橙=已补贴 / 绿=合规清单），
+    // 点位若带补贴属性图标（subsidyIcons = station-1/2，蓝=无补贴 / 绿=已补贴），
     // 用对应 station 图片作为 symbol（图片自带配色，与右下角图例共用同一套图标）
     // symbolSize 必须用数字：数组尺寸会让 zrender 走 scale 缩放渲染（style.width=2 + scale），
     // zrender 4 的 Image.contain 不做 transform 逆变换，该形态下鼠标命中/悬浮全部失效
@@ -1025,15 +1040,17 @@ export default {
         this._onFsChange = null
       }
     },
-    // 更多>>点击：提取详情数据并传递给父组件
+    // 更多>> / 详情>>：把地图 projectList 的 projectColor 连同详情数据交给父组件，
+    // 目标详情页据此做项目分类（蓝色=无补贴、绿色=已补贴），不再用旧字段分类
     handlePointMore() {
+      const raw = this.activePoint.raw
       const detail = this.pointDetail || {}
-      this.$emit('handlePointMore', { raw: this.activePoint.raw, detail: detail })
+      this.$emit('handlePointMore', { raw, projectColor: raw.projectColor, detail })
     },
-    // 详情>>点击：提取详情数据并传递给父组件
     handlePointDetail() {
+      const raw = this.activePoint.raw
       const detail = this.pointDetail || {}
-      this.$emit('handlePointDetail', { raw: this.activePoint.raw, detail: detail })
+      this.$emit('handlePointDetail', { raw, projectColor: raw.projectColor, detail })
     }
   }
 }
