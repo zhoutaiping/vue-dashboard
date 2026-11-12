@@ -64,6 +64,7 @@ export const STATUS_PARAM_MAP = {
 export const CATEGORY_FIELD_MAP = { label: 'name', value: 'id', count: 'count' }
 
 // 地区排名维度（全国 queryNationalRanking 的 rankingType：projectCount·项目个数, rate·达标率, capacity·装机容量, hour·利用小时数）
+// unit 为维度单位，RankList 渲染 tab 标签时按「label(unit)」拼接，如 项目个数(个)
 export const RANK_TYPES = [
   { label: '项目个数', value: 'projectCount', unit: '个' },
   { label: '达标率', value: 'rate', unit: '%' },

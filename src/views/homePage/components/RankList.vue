@@ -8,7 +8,7 @@
         :class="{ 'is-active': tab.value === activeTab }"
         @click="handleTabClick(tab)"
       >
-        {{ tab.label }}
+        {{ tabText(tab) }}
       </span>
     </div>
 
@@ -98,6 +98,10 @@ export default {
     }
   },
   methods: {
+    // 维度标签带上配置里的单位：项目个数(个)、达标率(%)……未配 unit 时只显示 label
+    tabText(tab) {
+      return tab.unit ? `${tab.label}(${tab.unit})` : tab.label
+    },
     // 名次修饰类：前三名 is-rank-1/2/3，其余走默认样式
     rankClass(index) {
       return index < 3 ? `is-rank-${index + 1}` : ''
@@ -122,21 +126,23 @@ export default {
 
   &__tabs {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     flex-wrap: wrap;
     padding-bottom: 8px;
     border-bottom: 1px solid #f0f2f5;
   }
 
-  /* 按钮式 tab：选中蓝底白字 */
+  /* 按钮式 tab：选中蓝底白字；标签带单位后收紧间距，尽量保持一行 */
   &__tab {
     font-size: 12px;
     color: #606266;
     cursor: pointer;
-    padding: 2px 12px;
-    border-radius: 12px;
-    background: #f5f7fa;
+    padding: 2px 4px;
+    white-space: nowrap;
+    border-radius: 4px;
     transition: all 0.2s;
+    background-color: rgba(242,243,245,1);
+    color: rgba(96,98,102,1);
 
     &:hover {
       color: #08f;
