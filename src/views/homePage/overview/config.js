@@ -11,9 +11,7 @@ import listIcon2 from '../list-icon-2.svg'
 import listIcon3 from '../list-icon-3.svg'
 import listIcon4 from '../list-icon-4.svg'
 import listIcon5 from '../list-icon-5.svg'
-import listIcon6 from '../list-icon-6.svg'
-import listIcon7 from '../list-icon-7.svg'
-import listIcon8 from '../list-icon-8.svg'
+import listIcon9 from '../list-icon-9.svg'
 
 import fullscreen1 from '../fullscreen-1.svg'
 import fullscreen2 from '../fullscreen-2.svg'
@@ -45,7 +43,7 @@ export const CATEGORIES = [
 export const INDUSTRY_ALL = '全部'
 
 // 历史常量：早期按「能源电力」行业决定运营项目情况的页签。
-// 现行逻辑固定展示风电/光伏/非标三项（index.vue energyTypeOptions），不再依赖行业 id；
+// 现行逻辑固定展示风电/地面光伏两项（index.vue energyTypeOptions），不再依赖行业 id；
 // 保留导出仅为兼容旧引用，当前 CATEGORIES 已不含该 id
 export const POWER_CATEGORY_ID = 'power'
 
@@ -175,56 +173,44 @@ export const STATUS_TAG_TYPE = {
   未按标准: 'warning'
 }
 
-// 能源类型 → 展示文案（项目情况卡片右上角切换：风电/光伏/非标）
-export const ENERGY_LABELS = { wind: '风电', pv: '光伏', nonstandard: '非标' }
+// 能源类型 → 展示文案（项目情况卡片右上角切换：风电/地面光伏）
+export const ENERGY_LABELS = { wind: '风电', pv: '地面光伏' }
 
-// 运营项目情况的类型页签顺序（固定三项，不随行业筛选增减）
-export const ENERGY_TYPE_KEYS = ['wind', 'pv', 'nonstandard']
+// 运营项目情况的类型页签顺序（固定两项，不随行业筛选增减）
+export const ENERGY_TYPE_KEYS = ['wind', 'pv']
 
-// 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏; 3.非标）
-export const OPERATE_TYPE_MAP = { wind: '1', pv: '2', nonstandard: '3' }
+// 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏）
+export const OPERATE_TYPE_MAP = { wind: '1', pv: '2' }
 
 // 运营项目情况指标：energyType → 指标项
 // field 支持「候选字段数组」：后端同一语义在不同 operateType 下的命名/大小写并不统一 ——
 // 利用小时数：风电返回 usehour（全小写）、光伏返回 useHour（驼峰）；
 // 结算电价：两种发电类型都返回 electrovalence（不是 electricityPrice）。
 // 取值时按数组顺序取第一个非空值，兼容后端字段拼写差异
-// amount 标记金额类指标（收入 / 电价）：展示时整数部分加千分位
+// amount 标记金额类指标（电价）：展示时整数部分加千分位
 const POWER_METRICS = [
   { label: '项目总数', field: ['projectCount'], unit: '个' },
+  { label: '代补贴项目数', field: ['subCount'], unit: '个' },
   { label: '装机容量', field: ['capacity'], unit: 'MW' },
   { label: '上网电量', field: ['onlinePower'], unit: '万kWh' },
   { label: '利用小时数', field: ['usehour', 'useHour', 'useHours'], unit: 'h' },
-  { label: '结算电价', field: ['electrovalence', 'electricityPrice', 'elecPrice'], unit: '元/kWh', amount: true },
-  { label: '千瓦收入', field: ['income'], unit: '元/kW', amount: true }
+  { label: '结算电价', field: ['electrovalence', 'electricityPrice', 'elecPrice'], unit: '元/kWh', amount: true }
 ]
 
 export const OPERATE_METRICS = {
   wind: POWER_METRICS,
-  pv: POWER_METRICS,
-  // 非标：指标项不同（oneMetric 语义变为度电收入）
-  nonstandard: [
-    { label: '项目总数', field: ['projectCount'], unit: '个' },
-    { label: '填报收入', field: ['writeIncome'], unit: '万元', amount: true },
-    { label: '账户收入', field: ['accountIncome'], unit: '万元', amount: true },
-    { label: '达标率', field: ['yield'], unit: '%' }
-  ]
+  pv: POWER_METRICS
 }
 
 // 运营项目情况图表：energyType → 柱线图系列映射
-// 风电/光伏取 powerLineChart（oneMetric=利用小时数）；非标取 nonPowerLineChart（oneMetric=度电收入）；yield=达标率折线
-// amount 标记金额系列（非标填报收入）：tooltip 数值按金额加千分位
+// 风电/光伏取 powerLineChart（oneMetric=利用小时数）；yield=达标率折线
 export const OPERATE_CHART_FIELDS = {
   wind: [
     { field: 'oneMetric', label: '风电发电利用小时数', type: 'bar' },
     { field: 'yield', label: '达标率', type: 'line' }
   ],
   pv: [
-    { field: 'oneMetric', label: '光伏发电利用小时数', type: 'bar' },
-    { field: 'yield', label: '达标率', type: 'line' }
-  ],
-  nonstandard: [
-    { field: 'oneMetric', label: '填报收入', type: 'bar', amount: true },
+    { field: 'oneMetric', label: '地面光伏发电利用小时数', type: 'bar' },
     { field: 'yield', label: '达标率', type: 'line' }
   ]
 }
@@ -252,36 +238,27 @@ export const MANAGE_TREND_FIELDS = [
 // 风电
 export const SUMMARY_ICONS_1 = {
   项目总数: listIcon1,
+  代补贴项目数: listIcon9,
   装机容量: listIcon2,
   上网电量: listIcon3,
   利用小时数: listIcon4,
-  结算电价: listIcon5,
-  千瓦收入: listIcon6
+  结算电价: listIcon5
 }
 
 // 光伏
 export const SUMMARY_ICONS_2 = {
   项目总数: listIcon1,
+  代补贴项目数: listIcon9,
   装机容量: listIcon2,
   上网电量: listIcon3,
   利用小时数: listIcon4,
-  结算电价: listIcon5,
-  千瓦收入: listIcon6
+  结算电价: listIcon5
 }
 
-// 非标
-export const SUMMARY_ICON_3 = {
-  项目总数: listIcon1,
-  填报收入: listIcon2,
-  账户收入: listIcon7,
-  达标率: listIcon8
-}
-
-// energyType → 图标映射（切换风电/光伏/非标时列表图标联动）
+// energyType → 图标映射（切换风电/地面光伏时列表图标联动）
 export const SUMMARY_ICONS_MAP = {
   wind: SUMMARY_ICONS_1,
-  pv: SUMMARY_ICONS_2,
-  nonstandard: SUMMARY_ICON_3
+  pv: SUMMARY_ICONS_2
 }
 
 // 地图右上角浮动菜单：项目状态筛选（多选，字段对应点位 status）

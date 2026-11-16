@@ -293,7 +293,7 @@ export default {
       rankList: [],
       // 建设/运营管理项目报表原始数据（逐月数组，经 manageTrend 计算属性映射为图表结构）
       manageList: [],
-      // 运营项目情况的能源类型（风电/光伏/非标，卡片右上角按钮切换，独立状态不与上报表联动）
+      // 运营项目情况的能源类型（风电/地面光伏，卡片右上角按钮切换，独立状态不与上报表联动）
       operateEnergyType: 'wind',
       // 运营项目情况原始数据（queryOperateDetail 返回，指标与图表一体）
       operateDetail: {},
@@ -443,7 +443,7 @@ export default {
     defaultPriceType() {
       return PRICE_OPTIONS[0].id
     },
-    // 运营项目情况的类型可选项：风电/光伏/非标 始终全部可选，与行业筛选无关。
+    // 运营项目情况的类型可选项：风电/地面光伏 始终全部可选，与行业筛选无关。
     // 行业只影响接口入参 industry；某个类型在当前行业下没有项目时，
     // 该页签自己的数据为空即可，不再靠隐藏页签来表达
     energyTypeOptions() {
@@ -487,7 +487,7 @@ export default {
       return (this.overview.industryNum || []).filter(item => item.industry !== INDUSTRY_ALL)
     },
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
-    // 收入 / 电价属金额（配置里带 amount 标记）：整数部分加千分位展示
+    // 电价属金额（配置里带 amount 标记）：整数部分加千分位展示
     summaryMetrics() {
       const conf = OPERATE_METRICS[this.operateEnergyType] || OPERATE_METRICS.wind
       const icons = SUMMARY_ICONS_MAP[this.operateEnergyType] || SUMMARY_ICONS_MAP.wind
@@ -506,10 +506,9 @@ export default {
         }
       })
     },
-    // 运营项目情况图表：风电/光伏取 powerLineChart，非标取 nonPowerLineChart，按配置映射柱线系列
+    // 运营项目情况图表：风电/光伏取 powerLineChart，按配置映射柱线系列
     operateChart() {
-      const nonstandard = this.operateEnergyType === 'nonstandard'
-      const list = (nonstandard ? this.operateDetail.nonPowerLineChart : this.operateDetail.powerLineChart) || []
+      const list = this.operateDetail.powerLineChart || []
       const fields = OPERATE_CHART_FIELDS[this.operateEnergyType] || OPERATE_CHART_FIELDS.wind
       return {
         xAxis: list.map(item => item.month),
@@ -517,8 +516,6 @@ export default {
           name: f.label,
           type: f.type,
           yAxisIndex: f.type === 'line' ? 1 : 0,
-          // 金额系列（非标填报收入）：tooltip 数值加千分位
-          amount: !!f.amount,
           data: list.map(item => {
             const value = Number(item[f.field]) || 0
             // 达标率口径兼容：接口可能返回比率（0.85）也可能返回百分数（85），
@@ -530,12 +527,9 @@ export default {
         }))
       }
     },
-    // 图表双 Y 轴名称（左轴 = 柱系列指标，右轴 = 折线达标率）
-    // 统一写成「指标(单位)」：只写「小时」这类单位在图上会变成一个孤立小字，看不出是什么指标
+    // 图表双 Y 轴名称由组件按刻度自适应，当前不显示额外轴名
     operateChartYAxis() {
-      return this.operateEnergyType === 'nonstandard'
-        ? [] // ['度电收入(元/kWh)', '达标率(%)']
-        : [] // ['利用小时数(h)', '达标率(%)']
+      return []
     },
     // 饼图配色按行业名匹配，与数据顺序解耦
     pieColors() {
@@ -797,7 +791,7 @@ export default {
       }
       this.fetchRank()
     },
-    // 运营项目情况能源类型切换（风电/光伏/非标）：只重新请求运营项目情况，不影响其它报表
+    // 运营项目情况能源类型切换（风电/地面光伏）：只重新请求运营项目情况，不影响其它报表
     operateEnergyType() {
       this.fetchOperateDetail()
     },
@@ -937,7 +931,7 @@ export default {
       }
       return null
     },
-    // 运营项目情况：POST queryOperateDetail，入参 = 全局报表参数 + operateType（随风电/光伏/非标切换联动）
+    // 运营项目情况：POST queryOperateDetail，入参 = 全局报表参数 + operateType（随风电/地面光伏切换联动）
     async fetchOperateDetail(seq = this.nextSeq()) {
       const params = Object.assign({}, this.reportParams, {
         operateType: OPERATE_TYPE_MAP[this.operateEnergyType] || '1'
@@ -1051,7 +1045,7 @@ export default {
       this.setCategories(isAll ? [] : list, !list.length)
     },
     // 行业选中态统一写入口：只写行业筛选这一个维度。
-    // 运营类型（风电/光伏/非标）、排名维度、电价维度都不跟行业联动，
+    // 运营类型（风电/地面光伏）、排名维度、电价维度都不跟行业联动，
     // 各自保留用户的当前选择，由本批 fetchAll 带上新 industry 统一取数。
     // none：是否为「全不选」空态 —— query.categories 为空数组时既可能是全选
     // （industry 传空取全量）也可能是全不选，二者必须靠该参数区分
@@ -1067,7 +1061,7 @@ export default {
     rankOptionsFor(level) {
       return level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
     },
-    // 运营项目情况卡片右上角能源类型切换（风电/光伏/非标）
+    // 运营项目情况卡片右上角能源类型切换（风电/地面光伏）
     // 类型最少选中一个：点击当前项不取消，不在可选项内的类型忽略
     handleEnergyChange(type) {
       if (type === this.operateEnergyType) return
@@ -1233,17 +1227,12 @@ export default {
     // 发电项目（POWER）跳运营侧项目清单，非标项目跳项目侧清单；
     // projectCode / id 取对应详情对象（powerGenerationDetail / nonStandardDetail）
     handlePointMore({ detail }) {
-      this.$message.info(`跳转项目详情页：模拟`, {
-        ...detail
-      })
-      const nonStandard = detail.nonStandardDetail || {}
-      const power = detail.powerGenerationDetail || {}
-      const data = detail.projectType === 'POWER' ? power : nonStandard
+      const data = detail.powerGenerationDetail
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
       const idPart = data.id ? `&id=${data.id}` : ''
       if (Number(data.status) === 2) {
         window.open(
-          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=base${idPart}`,
+          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&pannel=base${idPart}`,
           '_blank'
         )
       } else {
@@ -1255,23 +1244,15 @@ export default {
     },
     // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
     handlePointDetail({ detail }) {
-      this.$message.info(`跳转运营填报列表页：模拟`, {
-        ...detail
-      })
-      const nonStandard = detail.nonStandardDetail || {}
-      const power = detail.powerGenerationDetail || {}
-      const data = detail.projectType === 'POWER' ? power : nonStandard
+      const data = detail.powerGenerationDetail
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
       const idPart = data.id ? `&id=${data.id}` : ''
       if (Number(data.status) === 2) {
         window.open(
-          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&panel=operational-data${idPart}`,
+          `${window.location.origin}/operational/project-list?mode=detail&projectCode=${data.projectCode}&pannel=operational-data${idPart}`,
           '_blank'
         )
       }
-    },
-    handleMore() {
-      this.$message.info('跳转项目清单页')
     }
   }
 }

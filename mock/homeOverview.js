@@ -555,42 +555,31 @@ module.exports = [
     type: 'post',
     response: config => {
       const body = config.body || {}
-      const { provinceName = '', operateType = '1' } = body
+      const { provinceName = '' } = body
 
       // 省份下钻后数值按比例缩小
       const ratio = provinceName ? 0.08 : 1
-      const nonstandard = operateType === '3'
       const months = buildMonths(body, 13)
 
-      // 指标图表：风电/光伏 oneMetric=利用小时数；非标 oneMetric=度电收入（万元/kWh）；yield=达标率
+      // 指标图表：风电/光伏 oneMetric=利用小时数；yield=达标率
       const lineChart = months.map((m, i) => ({
         month: m,
-        oneMetric: nonstandard
-          ? String(randomInt(10, 60, i + 4) / 100)
-          : String(randomInt(1200, 3200, i + 4)),
+        oneMetric: String(randomInt(1200, 3200, i + 4)),
         yield: String(randomInt(60, 100, i + 8))
       }))
 
-      const metrics = nonstandard
-        ? {
-          projectCount: String(Math.round(96 * ratio)),
-          writeIncome: String(randomInt(100, 900, 5) / 10),
-          accountIncome: String(randomInt(80, 700, 9) / 10),
-          yield: String(randomInt(80, 100, 12))
-        }
-        : {
-          projectCount: String(Math.round(385 * ratio)),
-          capacity: String(randomInt(100, 2000, 5) / 10),
-          onlinePower: String(randomInt(5000, 30000, 7)),
-          useHours: String(randomInt(1200, 3200, 11)),
-          electricityPrice: String(randomInt(30, 80, 13) / 100),
-          income: String(randomInt(100, 300, 15) / 10),
-          oneMetric: '0.00'
-        }
+      const metrics = {
+        projectCount: String(Math.round(385 * ratio)),
+        subCount: String(Math.round(131 * ratio)),
+        capacity: String(randomInt(100, 2000, 5) / 10),
+        onlinePower: String(randomInt(5000, 30000, 7)),
+        useHours: String(randomInt(1200, 3200, 11)),
+        electricityPrice: String(randomInt(30, 80, 13) / 100),
+        oneMetric: '0.00'
+      }
 
       return ok(Object.assign({ msg: '' }, metrics, {
-        powerLineChart: nonstandard ? [] : lineChart,
-        nonPowerLineChart: nonstandard ? lineChart : []
+        powerLineChart: lineChart
       }))
     }
   },
