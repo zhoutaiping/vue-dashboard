@@ -2,6 +2,8 @@ import {
   DEFAULT_PAGE_CANDIDATES,
   resolveDefaultMenu,
   resolveDefaultActive,
+  resolveDefaultPage,
+  findMenuIdByCode,
   toMenuIndex
 } from '@/utils/menu-default'
 
@@ -118,7 +120,8 @@ describe('resolveDefaultMenu', () => {
 
   it('兼容接口原始响应对象与未格式化的菜单树', () => {
     expect(resolveDefaultMenu({ code: 200, data: buildMenus() }).defaultActive).toBe('236')
-    expect(resolveDefaultMenu({ code: 200, data: { menus: buildMenus() } }).defaultActive).toBe('236')
+    const nested = { menus: buildMenus() }
+    expect(resolveDefaultMenu({ code: 200, data: nested }).defaultActive).toBe('236')
     const raw = buildMenus()
     raw.forEach(node => delete node.meta)
     expect(resolveDefaultMenu(raw).defaultActive).toBe('236')
@@ -133,6 +136,80 @@ describe('resolveDefaultMenu', () => {
     const snapshot = JSON.stringify(menus)
     resolveDefaultMenu(menus)
     expect(JSON.stringify(menus)).toBe(snapshot)
+  })
+})
+
+describe('resolveDefaultPage', () => {
+  it('规则1：有 RAA4 权限或超级管理员 → 首页，并返回可用于 redirect 的 path', () => {
+    const res = { code: 200, msg: 'success', data: buildMenus() }
+    const page = resolveDefaultPage(res, { permissions: ['RAA4'], homePageStatus: 0 })
+    expect(page.code).toBe('RAA4')
+    expect(page.defaultActive).toBe('236')
+    expect(page.path).toBe('/system/menuManage')
+    expect(resolveDefaultPage(buildMenus(), { isSuperAdmin: true, homePageStatus: 2 }).code).toBe('RAA4')
+  })
+
+  it('规则2：无 RAA4 但 HomePageStatus > 0 且有 RAA1 → 数据概览', () => {
+    const page = resolveDefaultPage(buildMenus(), { permissions: ['RAA1'], homePageStatus: 1 })
+    expect(page.code).toBe('RAA1')
+    expect(page.defaultActive).toBe('2')
+    expect(resolveDefaultPage(buildMenus(), { permissions: code => code === 'RAA1', homePageStatus: '2' }).code).toBe('RAA1')
+  })
+
+  it('规则3：HomePageStatus <= 0 或缺 RAA1 → 待办消息', () => {
+    expect(resolveDefaultPage(buildMenus(), { permissions: ['RAA1'], homePageStatus: 0 }).code).toBe('RAA2')
+    expect(resolveDefaultPage(buildMenus(), { permissions: 'RAA,RAA1', homePageStatus: 0 }).code).toBe('RAA2')
+    expect(resolveDefaultPage(buildMenus(), { permissions: [], homePageStatus: 1 }).code).toBe('RAA2')
+  })
+
+  it('未传 permissions 时按可见菜单判定权限', () => {
+    expect(resolveDefaultPage(buildMenus(), { homePageStatus: 0 }).code).toBe('RAA4')
+    const noHome = buildMenus().slice(1)
+    expect(resolveDefaultPage(noHome, { homePageStatus: 1 }).code).toBe('RAA1')
+  })
+
+  it('目标菜单缺失时按候选降级；空数据返回 null', () => {
+    const onlyTodo = [{ id: 5, code: 'RAA2', name: '待办消息', meantype: 'menu', menuCode: '/home/todo', sidebarShow: 0, deleteFlag: 0 }]
+    expect(resolveDefaultPage(onlyTodo, { isSuperAdmin: true, homePageStatus: 0 }).code).toBe('RAA2')
+    expect(resolveDefaultPage([], { isSuperAdmin: true })).toBe(null)
+  })
+})
+
+describe('findMenuIdByCode', () => {
+  it('按 code 从接口响应和嵌套 children 里查到 id', () => {
+    const res = { code: 200, msg: 'success', data: buildMenus() }
+    expect(findMenuIdByCode(res, 'RAA4')).toBe(236)
+    expect(findMenuIdByCode(res, 'RAA1')).toBe(2)
+    expect(findMenuIdByCode(res, 'RAA2')).toBe(5)
+    const wrappedMenus = { menus: buildMenus() }
+    expect(findMenuIdByCode({ data: wrappedMenus }, 'RAA4')).toBe(236)
+    expect(findMenuIdByCode(buildMenus(), 'RAA1')).toBe(2)
+  })
+
+  it('忽略大小写与首尾空格；找不到返回 null', () => {
+    expect(findMenuIdByCode(buildMenus(), ' raa1 ')).toBe(2)
+    expect(findMenuIdByCode(buildMenus(), 'RAA9')).toBe(null)
+    expect(findMenuIdByCode(buildMenus(), '')).toBe(null)
+    expect(findMenuIdByCode([], 'RAA4')).toBe(null)
+    expect(findMenuIdByCode(null, 'RAA4')).toBe(null)
+  })
+
+  it('隐藏 / 已删除 / 按钮节点不参与，与 resolveDefaultMenu 同口径', () => {
+    const hidden = buildMenus()
+    hidden[0].sidebarShow = 1
+    expect(findMenuIdByCode(hidden, 'RAA4')).toBe(null)
+    const deleted = buildMenus()
+    deleted[1].children[0].deleteFlag = 1
+    expect(findMenuIdByCode(deleted, 'RAA1')).toBe(null)
+    const button = buildMenus()
+    button[0].meantype = 'button'
+    expect(findMenuIdByCode(button, 'RAA4')).toBe(null)
+  })
+
+  it('返回原始 id，可用 toMenuIndex 转成侧栏 default-active 字符串', () => {
+    const id = findMenuIdByCode(buildMenus(), 'RAA4')
+    expect(toMenuIndex(id)).toBe('236')
+    expect(id === null ? '' : toMenuIndex(id)).toBe('236')
   })
 })
 

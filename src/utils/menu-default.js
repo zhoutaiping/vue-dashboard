@@ -108,6 +108,23 @@ function toDefaultMenu(node) {
 }
 
 /**
+ * 按菜单 code 查找 id：兼容接口原始响应 { code: 200, data: [...] }、格式化后的菜单树，
+ * 递归遍历 children，按 code 精确匹配（忽略大小写与首尾空格）。
+ * 隐藏、已删除、按钮节点与 resolveDefaultMenu 同口径不参与；命中返回原始 id，未命中返回 null。
+ * 侧栏 default-active 需字符串：const id = findMenuIdByCode(...); id === null ? '' : toMenuIndex(id)
+ *
+ * @param {Array|Object} menus 菜单数据（接口响应 / 菜单树 / store.currentMenus）
+ * @param {String} code 菜单编码，如 'RAA4'
+ * @returns {Number|String|null} 菜单 id，找不到返回 null
+ */
+export function findMenuIdByCode(menus, code) {
+  const target = normalize(code)
+  if (!target) return null
+  const hit = flattenMenus(toTree(menus)).find(node => normalize(node.code) === target)
+  return hit && hit.id !== undefined && hit.id !== null ? hit.id : null
+}
+
+/**
  * @param {Array|Object} menus store.getters.currentMenus
  * @param {Object} options
  *   candidates      自定义优先级，默认 DEFAULT_PAGE_CANDIDATES
@@ -134,6 +151,48 @@ export function resolveDefaultMenu(menus, options) {
 export function resolveDefaultActive(menus, options) {
   const menu = resolveDefaultMenu(menus, options)
   return menu ? menu.defaultActive : ''
+}
+
+/**
+ * 按业务规则解析「默认打开的页面」：
+ *   1. 超级管理员或拥有 RAA4 权限 → 首页
+ *   2. 否则 HomePageStatus > 0 且拥有 RAA1 权限 → 数据概览
+ *   3. 都不满足 → 待办消息
+ * permissions 可传权限码数组 / 逗号字符串 / hasPermission 函数；不传时按「可见菜单里存在该 code」判定。
+ * isSuperAdmin、homePageStatus 由调用方从 store / localStorage 传入，保持本模块零外部依赖。
+ * 返回与 resolveDefaultMenu 相同的菜单对象（含 id、path、defaultActive）；无可用菜单返回 null。
+ *
+ * 注意：defaultActive 只控制侧栏高亮，默认打开哪个页面由路由 redirect / 登录后的 router.push 决定。
+ * 迁移时请把它们改为使用返回值的 path，否则 URL 仍会停在旧默认页（如 /home/dashboard）。
+ *
+ * @param {Array|Object} menus 菜单数据（接口响应 / 菜单树 / store.currentMenus）
+ * @param {Object} options { permissions, isSuperAdmin, homePageStatus }
+ * @returns {Object|null}
+ */
+export function resolveDefaultPage(menus, options) {
+  const opts = options || {}
+  const nodes = flattenMenus(toTree(menus))
+  const findByCode = code => {
+    const target = normalize(code)
+    return target ? nodes.find(node => normalize(node.code) === target) : null
+  }
+  const perms = opts.permissions
+  const hasPermission = code => {
+    if (typeof perms === 'function') return !!perms(code)
+    if (Array.isArray(perms)) return perms.map(normalize).indexOf(normalize(code)) > -1
+    if (typeof perms === 'string') return perms.split(',').map(normalize).indexOf(normalize(code)) > -1
+    return !!findByCode(code)
+  }
+  const canHome = !!opts.isSuperAdmin || hasPermission('RAA4')
+  const canOverview = Number(opts.homePageStatus) > 0 && hasPermission('RAA1')
+  // 目标菜单缺失时按候选顺序降级，保证总能给出一个可见页面
+  const codes = canHome ? ['RAA4', 'RAA1', 'RAA2']
+    : (canOverview ? ['RAA1', 'RAA2', 'RAA4'] : ['RAA2', 'RAA1', 'RAA4'])
+  for (let i = 0; i < codes.length; i += 1) {
+    const hit = findByCode(codes[i])
+    if (hit) return toDefaultMenu(hit)
+  }
+  return null
 }
 
 export default resolveDefaultMenu
