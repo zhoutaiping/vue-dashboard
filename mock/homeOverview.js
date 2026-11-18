@@ -515,6 +515,7 @@ module.exports = [
           actualController: `${province.name}市百色电力有限公司`,
           capacity: String(randomInt(500, 3000, tail2)),
           hours: String(randomInt(80, 300, tail3)),
+          radio: String(randomInt(70, 99, tail4)),
           rate: String(randomInt(70, 99, tail4)),
           editWindPrice: String(randomInt(1000, 6000, tail5) / 10000), // 结算电价（4 位小数，便于演示差值）
           spotSettlementPrice: String(randomInt(1000, 6000, tail5 + 9) / 10000), // Spot结算电价

@@ -294,7 +294,18 @@ export default {
       const p = detail.powerGenerationDetail || {}
       const capacity = p.capacity !== undefined ? p.capacity : (p.installCapacity !== undefined ? p.installCapacity : raw.capacity)
       const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
-      const rate = p.rate !== undefined ? p.rate : raw.rate
+      // 达标率：接口字段为 radio（兼容旧 rate / yield 口径），详情缺失时回退点位原始数据。
+      // 始终渲染该后缀，缺值时显示 --，避免整段消失让人误以为字段没对上
+      const pickRate = obj => {
+        const keys = ['radio', 'rate', 'yield']
+        for (let i = 0; i < keys.length; i += 1) {
+          const value = obj && obj[keys[i]]
+          if (value !== undefined && value !== null && value !== '') return value
+        }
+        return null
+      }
+      const detailRate = pickRate(p)
+      const rate = detailRate === null ? pickRate(raw) : detailRate
       // 结算电价优先取详情（兼容历史 editWindPrice），详情无值时回退点位数据
       const settleRaw = pickPriceValue(p, POINT_PRICE_COMPARE.priceFields)
       const settle = settleRaw === null ? pickPriceValue(raw, [POINT_TIP.valueField]) : settleRaw
@@ -314,7 +325,7 @@ export default {
       return [
         { label: '实控人', value: fmt(p.actualController || raw.controller) },
         { label: '装机容量', value: `${fmt(capacity)}kW` },
-        { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: rate !== undefined && rate !== null && rate !== '' ? `（达标率：${rate}%）` : '' },
+        { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: `（达标率：${rate === null ? '--' : rate}%）` },
         { label: '结算电价', value: `${fmt(settle)}元/kWh`, sub: settleSub, subColor: settleSubColor },
         { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
       ]
