@@ -11,8 +11,9 @@ import { patchZoomPointer } from '../pointer'
 
 /**
  * 通用柱线混合图（双 Y 轴，纯展示）
- * series 由外部传入：[{ name, type: 'bar'|'line', data, yAxisIndex, color, amount }]
+ * series 由外部传入：[{ name, type: 'bar'|'line', data, yAxisIndex, color, amount, unit }]
  * amount: true 表示该系列是金额（收入/电价），仅用于 tooltip 千分位展示，不进入 echarts 配置
+ * unit: 系列单位（如 h/%），tooltip 优先使用，未配置时回退到所属 Y 轴轴名或顶栏 unit
  * 不绑定任何业务字段，便于迁移复用
  */
 export default {
@@ -305,8 +306,8 @@ export default {
               const value = p.value == null
                 ? '-'
                 : (amountFlags[idx] ? formatAmount(p.value) : p.value)
-              // 单位跟随系列所在 Y 轴（柱=h/个、折线=%），与轴名/刻度保持同一口径
-              const unit = this.valueUnit((series[idx] && series[idx].yAxisIndex) || 0)
+              // 单位优先取系列自带 unit（配置化字段口径），没有时再跟随所属 Y 轴
+              const unit = (series[idx] && series[idx].unit) || this.valueUnit((series[idx] && series[idx].yAxisIndex) || 0)
               const unitHtml = unit && p.value != null
                 ? `<span style="color:#909399;margin-left:2px;">${unit}</span>`
                 : ''

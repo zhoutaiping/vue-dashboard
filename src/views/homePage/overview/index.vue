@@ -516,6 +516,7 @@ export default {
           name: f.label,
           type: f.type,
           yAxisIndex: f.type === 'line' ? 1 : 0,
+          unit: f.unit,
           data: list.map(item => {
             const value = Number(item[f.field]) || 0
             // 达标率口径兼容：接口可能返回比率（0.85）也可能返回百分数（85），
