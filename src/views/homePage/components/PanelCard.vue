@@ -4,7 +4,6 @@
       <div class="panel-card__left">
         <slot name="header">
           <span class="panel-card__title">
-            <!-- <i v-if="icon" :class="['panel-card__icon', icon]" /> -->
             <el-image :src="titleIcon" style="width: 14px; height: 14px" />
             {{ title }}
           </span>
@@ -24,10 +23,7 @@
 <script>
 import titleIcon from '../card-title-icon.svg'
 
-/**
- * 通用面板容器（纯展示，不请求数据）
- * 后期迁移只需保证外部传入 title/插槽内容即可复用
- */
+/** 通用面板容器（纯展示，不请求数据） */
 export default {
   name: 'PanelCard',
   props: {
@@ -65,7 +61,6 @@ export default {
     height: 40px;
     border-radius: 12px 12px 0px 0px;
     background-color: rgba(250,250,250,1)
-    // border-bottom: 1px solid #f0f2f5;
   }
 
   &__left {
@@ -82,17 +77,6 @@ export default {
     color: #303133;
     white-space: nowrap;
     gap: 12px;
-
-    /* 标题前蓝色竖条 */
-    // &::before {
-    //   content: '';
-    //   width: 4px;
-    //   height: 14px;
-    //   border-radius: 2px;
-    //   background: #08f;
-    //   margin-right: 6px;
-    //   flex-shrink: 0;
-    // }
   }
 
   &__icon {
@@ -100,7 +84,6 @@ export default {
     color: #0088ff;
   }
 
-  /* 区域后缀，与标题连成 "项目总览(全国)" 样式 */
   &__subtitle {
     font-size: 15px;
     font-weight: 600;
@@ -120,7 +103,6 @@ export default {
     flex: 1;
     padding: 12px;
     min-height: 0;
-    /* 内容高度受限时由插槽内部（如列表）自行滚动 */
     overflow: hidden auto;
   }
 }

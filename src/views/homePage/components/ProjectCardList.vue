@@ -44,22 +44,17 @@
 </template>
 
 <script>
-/**
- * 通用项目卡片列表（纯展示）
- * 展示字段由 fields 配置：[{ label, field, unit }]，后期可自由增删
- */
+/** 通用项目卡片列表（纯展示）；展示字段由 fields 配置 */
 export default {
   name: 'ProjectCardList',
   props: {
     items: { type: Array, default: () => [] },
     title: { type: String, default: '' },
-    // 展示字段配置
     fields: { type: Array, default: () => [] },
     fieldMap: {
       type: Object,
       default: () => ({ id: 'id', name: 'name', tag: 'status' })
     },
-    // 状态 → el-tag 类型映射，可覆盖
     tagTypeMap: { type: Object, default: () => ({}) },
     showMore: { type: Boolean, default: false }
   },

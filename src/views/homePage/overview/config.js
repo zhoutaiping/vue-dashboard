@@ -1,8 +1,4 @@
-/**
- * 首页总览配置中心
- * 所有与后端字段名、展示文案、配色相关的定义集中在此，
- * 后期接口字段变更 / 页面迁移只需改本文件，不动组件
- */
+// 首页总览配置中心：后端字段、文案与配色集中在此，字段变更只改本文件
 
 import totalProjectsIcon from '../totalProjects.png'
 import monitorProjectsIcon from '../monitorProjects.png'
@@ -20,35 +16,28 @@ import station1 from '../station-1.png'
 import station2 from '../station-2.png'
 
 export const fullscreenIcon = {
-  1: fullscreen1, // 全屏
-  2: fullscreen2 // 退出
+  1: fullscreen1,
+  2: fullscreen2
 }
 
-// 地图点位 / 右下角图例图标：蓝=无补贴(station-1)、绿=已补贴(station-2)，与 POINT_CATEGORIES 一一对应
-// 注意：图标颜色是画在图片里的，文件名与业务分类并不对应（station-2 是绿色），
-// 这里按图片实际颜色映射，保证打点、图例、弹窗图钉三者同色
+// 蓝=无补贴(station-1)、绿=已补贴(station-2)；文件名与颜色不对应，按图片实际颜色映射
 export const station_type = {
-  '无补贴': station1, // 蓝
-  '已补贴': station2 // 绿
+  '无补贴': station1,
+  '已补贴': station2
 }
 
-// 行业定义（真实接口 industry 只有两种：风电、地面光伏，支持多选）
-// name 与接口字段一致，id 与 mock/homeOverview.js 保持一致；color 用于图表与地图图例
+// name 与接口一致，id 与 mock 保持一致
 export const CATEGORIES = [
   { id: 'wind', name: '风电', color: '#0088ff' },
   { id: 'groundPv', name: '地面光伏', color: '#f5a623' }
 ]
 
-// 行业"全部"标识（industryNum 第一项）
 export const INDUSTRY_ALL = '全部'
 
-// 历史常量：早期按「能源电力」行业决定运营项目情况的页签。
-// 现行逻辑固定展示风电/地面光伏两项（index.vue energyTypeOptions），不再依赖行业 id；
-// 保留导出仅为兼容旧引用，当前 CATEGORIES 已不含该 id
+// 兼容旧引用
 export const POWER_CATEGORY_ID = 'power'
 
-// 地图状态筛选（多选集合）→ 项目总览接口 status 参数
-// 接口枚举：1在建; 2运营; 3在建和运营; 4未选择（key 为筛选集合排序后逗号拼接）
+// 状态筛选 → status：1在建 2运营 3在建和运营 4未选择
 export const STATUS_PARAM_MAP = {
   '在建,运营': '3',
   '在建': '1',
@@ -56,11 +45,9 @@ export const STATUS_PARAM_MAP = {
   '': '4'
 }
 
-// 分类 Tab 字段映射：组件按此读取字段，后端改名只改这里
 export const CATEGORY_FIELD_MAP = { label: 'name', value: 'id', count: 'count' }
 
-// 地区排名维度（全国 queryNationalRanking 的 rankingType：projectCount·项目个数, rate·达标率, capacity·装机容量, hour·利用小时数）
-// unit 为维度单位，RankList 渲染 tab 标签时按「label(unit)」拼接，如 项目个数(个)
+// 全国排名维度，unit 用于拼接 tab 标签「label(unit)」
 export const RANK_TYPES = [
   { label: '项目个数', value: 'projectCount', unit: '个' },
   { label: '达标率', value: 'rate', unit: '%' },
@@ -68,14 +55,13 @@ export const RANK_TYPES = [
   { label: '利用小时数', value: 'hour', unit: 'h' }
 ]
 
-// 地区排名维度（省内 queryRegionRanking，枚举与全国不同：无"项目个数"）
+// 省内排名维度：无「项目个数」
 export const REGION_RANK_TYPES = [
   { label: '达标率', value: 'rate', unit: '%' },
   { label: '装机容量', value: 'capacity', unit: 'MW' },
   { label: '利用小时数', value: 'hour', unit: 'h' }
 ]
 
-// 排名列表字段映射
 export const RANK_FIELD_MAP = { name: 'name', value: 'value', code: 'code' }
 
 // 地图点位字段映射（mapDisplay 接口 projectList → 点位结构）
@@ -87,20 +73,17 @@ export const POINT_FIELD_MAP = {
   category: 'category'
 }
 
-// 地图点位两分类（接口 projectColor：蓝色=无补贴、绿色=有补贴）
+// projectColor：蓝色=无补贴、绿色=有补贴
 export const POINT_CATEGORIES = [
   { id: 'noSubsidy', name: '无补贴', color: '#0088ff' },
   { id: 'subsidy', name: '已补贴', color: '#2fc25b' }
 ]
 
-// 分类 id / 分类名 → 分类定义（color/name/id）
-// 地图打点、右下角图例、点击弹窗配色统一走这里，避免各处各写一套导致颜色不一致
 export function pointCategory(key) {
   return POINT_CATEGORIES.find(c => c.id === key || c.name === key) || POINT_CATEGORIES[0]
 }
 
-// projectColor 值 → 分类 id：后端枚举/文案变更只改这张表
-// 兼容中文色名、英文名与色值；未识别的值统一按无补贴（蓝色）处理
+// 后端枚举/文案变更只改这张表
 export const PROJECT_COLOR_MAP = {
   '蓝色': 'noSubsidy',
   blue: 'noSubsidy',
@@ -110,31 +93,24 @@ export const PROJECT_COLOR_MAP = {
   '#2fc25b': 'subsidy'
 }
 
-// mapDisplay.projectList 分类规则：以接口新字段 projectColor 为准，不再用 natProject/compCatalog 推导合规清单
-// 蓝色 → 无补贴；绿色 → 已补贴（原合规清单项目由后端统一返回绿色）
-// projectColor 缺失时回退旧字段 natProject=1 判为已补贴，保证接口灰度期点位仍有颜色
+// 以 projectColor 为准，natProject 仅作旧接口兜底
 export function classifyProjectColor(projectColor, item) {
   const key = String(projectColor == null ? '' : projectColor).trim().toLowerCase()
   if (PROJECT_COLOR_MAP[key]) return PROJECT_COLOR_MAP[key]
-  // 兼容「绿色(有补贴)」这类带后缀的写法
   if (key.indexOf('绿') > -1 || key.indexOf('green') > -1) return 'subsidy'
   if (!key && Number(item && item.natProject) === 1) return 'subsidy'
   return 'noSubsidy'
 }
 
-// 地图悬浮卡片展示字段（可自由增删）
 export const HOVER_FIELDS = [
   { label: '城市', field: 'cityName' },
   { label: '项目编码', field: 'projectCode' },
   { label: '补贴类型', field: 'categoryName' }
 ]
 
-// 点位悬浮 mini 胶囊（原型：⚡电价 + 项目编号）：valueField 为项目级电价字段
 export const POINT_TIP = { valueField: 'settlementPrice', codeField: 'projectCode' }
 
-// 发电项目详情卡片：结算电价与 Spot 结算电价的差值（展示绝对值 + 涨跌箭头）
-// priceFields：结算电价候选字段（兼容历史 editWindPrice）；spotField：新接口字段，按项目类型返回风电/光伏电价
-// digits：差值小数位；差值 > 0 红色向上、< 0 绿色向下、= 0 灰色无箭头
+// 结算电价与 Spot 电价的差值展示（绝对值 + 涨跌箭头）
 export const POINT_PRICE_COMPARE = {
   priceFields: ['editWindPrice', 'settlementPrice'],
   spotField: 'spotSettlementPrice',
@@ -144,18 +120,12 @@ export const POINT_PRICE_COMPARE = {
   flatColor: '#909399'
 }
 
-// 点位详情（/largeScreen/projectDetail）非标项目枚举文案
-// 发电项目（POWER）与非标项目（NON_STANDARD）卡片展示字段不同（原型交互13）
 export const PROJECT_DETAIL_TEXT = {
-  // 接入方式：1自动 2手动 3接入
   accessMethod: { 1: '自动', 2: '手动', 3: '接入' },
-  // 生产及预警：0正常运行 1顺歌运行 2预警运行
   productionTypes: { 0: '正常运行', 1: '顺歌运行', 2: '预警运行' },
-  // 是否平台转发：1是 2否，null/空 = 不涉及
   platformTransfer: { 1: '是', 2: '否', none: '不涉及' }
 }
 
-// 项目卡片展示字段
 export const PROJECT_CARD_FIELDS = [
   { label: '项目类型', field: 'categoryName' },
   { label: '装机容量', field: 'capacity', unit: 'MW' },
@@ -163,31 +133,21 @@ export const PROJECT_CARD_FIELDS = [
   { label: '平准收入', field: 'income', unit: '元/kW' }
 ]
 
-// 项目卡片字段映射
 export const PROJECT_FIELD_MAP = { id: 'id', name: 'name', tag: 'status' }
 
-// 项目状态 → tag 类型
 export const STATUS_TAG_TYPE = {
   在建: 'primary',
   运营: 'success',
   未按标准: 'warning'
 }
 
-// 能源类型 → 展示文案（项目情况卡片右上角切换：风电/地面光伏）
 export const ENERGY_LABELS = { wind: '风电', pv: '地面光伏' }
 
-// 运营项目情况的类型页签顺序（固定两项，不随行业筛选增减）
 export const ENERGY_TYPE_KEYS = ['wind', 'pv']
 
-// 能源类型 → 接口 operateType（queryOperateDetail：1.风电; 2.光伏）
+// operateType：1.风电 2.光伏
 export const OPERATE_TYPE_MAP = { wind: '1', pv: '2' }
 
-// 运营项目情况指标：energyType → 指标项
-// field 支持「候选字段数组」：后端同一语义在不同 operateType 下的命名/大小写并不统一 ——
-// 利用小时数：风电返回 usehour（全小写）、光伏返回 useHour（驼峰）；
-// 结算电价：两种发电类型都返回 electrovalence（不是 electricityPrice）。
-// 取值时按数组顺序取第一个非空值，兼容后端字段拼写差异
-// amount 标记金额类指标（电价）：展示时整数部分加千分位
 const POWER_METRICS = [
   { label: '项目总数', field: ['projectCount'], unit: '个' },
   { label: '待补贴项目数', field: ['subCount'], unit: '个' },
@@ -202,8 +162,7 @@ export const OPERATE_METRICS = {
   pv: POWER_METRICS
 }
 
-// 运营项目情况图表：energyType → 柱线图系列映射
-// 风电/光伏取 powerLineChart（oneMetric=利用小时数）；yield=达标率折线
+// oneMetric=利用小时数，yield=达标率
 export const OPERATE_CHART_FIELDS = {
   wind: [
     { field: 'oneMetric', label: '风电发电利用小时数', type: 'bar', unit: 'h' },
@@ -215,27 +174,24 @@ export const OPERATE_CHART_FIELDS = {
   ]
 }
 
-// 项目总览顶部指标（左栏卡片），field 对应 queryProjectOverview 接口返回字段；trend: up/down 显示趋势箭头
+// field 对应 queryProjectOverview 接口字段
 export const OVERVIEW_METRICS = [
   { label: '建设项目', field: 'constructionCount', unit: '个', icon: totalProjectsIcon, trend: 'up' },
   { label: '运营期项目', field: 'operationCount', unit: '个', icon: monitorProjectsIcon, trend: 'up' }
 ]
 
-// 项目总览玫瑰图字段映射（industryNum: [{ industry, projectCount, percentage }]）
 export const PIE_FIELD_MAP = { name: 'industry', value: 'projectCount' }
 
-// 建设/运营管理项目图表配色（与 MANAGE_TREND_FIELDS 顺序一一对应）
+// 顺序与 MANAGE_TREND_FIELDS 一一对应
 export const MANAGE_COLORS = ['#08f', '#0fc98f', '#F56C6C']
 
-// 建设/运营管理项目报表（queryBuildandOperate 返回逐月数组）→ 柱线图系列映射
-// field 对应接口返回字段；type: bar=柱（参与堆叠）/ line=折线
+// field 对应 queryBuildandOperate 返回字段；bar=柱、line=折线
 export const MANAGE_TREND_FIELDS = [
   { field: 'constructionCount', label: '在建项目', type: 'bar' },
   { field: 'operationCount', label: '运营项目', type: 'bar' },
   { field: 'outstandingCount', label: '未结清项目', type: 'line' }
 ]
 
-// 风电
 export const SUMMARY_ICONS_1 = {
   项目总数: listIcon1,
   待补贴项目数: listIcon9,
@@ -245,7 +201,6 @@ export const SUMMARY_ICONS_1 = {
   结算电价: listIcon5
 }
 
-// 光伏
 export const SUMMARY_ICONS_2 = {
   项目总数: listIcon1,
   待补贴项目数: listIcon9,
@@ -255,33 +210,25 @@ export const SUMMARY_ICONS_2 = {
   结算电价: listIcon5
 }
 
-// energyType → 图标映射（切换风电/地面光伏时列表图标联动）
 export const SUMMARY_ICONS_MAP = {
   wind: SUMMARY_ICONS_1,
   pv: SUMMARY_ICONS_2
 }
 
-// 地图右上角浮动菜单：项目状态筛选（多选，字段对应点位 status）
 export const BUILD_FILTERS = [
   { id: '运营', label: '显示运营' },
   { id: '在建', label: '显示在建' }
 ]
 
-// 地图右下角浮动菜单：补贴属性筛选（多选，只保留无补贴/已补贴两类，key 与 station_type 一致）
 export const SUBSIDY_FILTERS = ['无补贴', '已补贴']
 
-// 地图左下角浮动菜单：结算电价（单选，可再点取消=不选；默认风电）
-// fields 为候选字段列表（按序取第一个有效值）：真实接口可能返回 avgXxx（null）
-// 或 xxx（字符串数值，如 "0.4155"），两种字段名都要兼容
-// 标杆电价仅全国视图提供（下钻到省后由容器过滤掉，见 overview/index.vue 的 priceOptions）
+// fields 为候选字段，按序取第一个有效值
 export const PRICE_OPTIONS = [
   { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice'] },
   { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice'] },
   { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'] }
 ]
 
-// 从对象中按候选字段列表取第一个「数值有效」的原始值，兼容字符串数值（"0.4155" / " 0.3 "）；
-// 全部无效（undefined/null/空串/非数值）返回 null
 export function pickPriceValue(obj, fields) {
   if (!obj) return null
   const list = Array.isArray(fields) ? fields : [fields]
@@ -294,8 +241,6 @@ export function pickPriceValue(obj, fields) {
   return null
 }
 
-// 电价接口（/largeScreen/mapDisplay/price）的字段集合：接口只返回这几项，
-// 取出来后整体覆盖到 mapDisplay 的分组/地市数据上，供着色、热力与悬浮浮层共用
 export const PRICE_DTO_FIELDS = [
   'avgSettlementPrice',
   'avgWindSettlementPrice',
@@ -307,8 +252,6 @@ export const PRICE_DTO_FIELDS = [
   'spotPvSettlementPrice'
 ]
 
-// 从电价接口的单条数据里摘出有效电价字段（空串/undefined 不带走，避免覆盖掉 mapDisplay 的旧值）；
-// 一项都没有时返回 null，调用方据此保留原数据
 export function pickPriceFields(source) {
   if (!source || typeof source !== 'object') return null
   const out = {}
@@ -316,7 +259,7 @@ export function pickPriceFields(source) {
     const val = source[key]
     if (val !== undefined && val !== null && val !== '') out[key] = val
   })
-  // 兼容 Swagger 里 Map 值被包一层 { additionalProperties1: {...} } 的形态
+
   if (!Object.keys(out).length) {
     const wrapped = Object.keys(source).filter(key => /^additionalProperties\d*$/.test(key))
     if (wrapped.length === 1) return pickPriceFields(source[wrapped[0]])
@@ -325,23 +268,16 @@ export function pickPriceFields(source) {
   return out
 }
 
-// 地图悬浮省份 / 市区浮层展示行（交互8）：
-// 差值 = 电价 - spot 均价；>0 绿色 + 向下箭头，<0 红色 + 向上箭头
-// 左下角电价菜单选中某维度时仅展示该行，未选中展示全部
-// fields：候选字段（avgXxx 为 null 时回退 xxx，兼容字符串数值），用 pickPriceValue 取值
-// nationalOnly：仅全国视图展示（下钻到省后无市区级标杆数据）
-// noDiff：标杆电价本身来自 spot（无独立 spot 均价可比），只展示数值不算差值
+// 差值 = 电价 - spot 均价；>0 绿↓，<0 红↑
 export const REGION_PRICE_COMPARE = [
   { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice'], spotField: 'spotPvSettlementPrice' },
   { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice'], spotField: 'spotWindSettlementPrice' },
   { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
 ]
 
-// 最小可选月份：2024-01 之前的月份不允许选择（地图电价/报表数据从 2024-01 起才有）
+// 数据起始月份
 export const MIN_MONTH = '2024-01'
 
-// 默认月份区间：近 12 个月（含当前月），yyyy-MM，对应接口 startMonth / endMonth
-// 例：当前 2026-11 → ['2025-12', '2026-11']。用 Date 处理跨年借位，起始/结束都夹到 MIN_MONTH
 const now = new Date()
 const monthText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
@@ -352,30 +288,21 @@ if (endMonthDate < minMonthDate) endMonthDate.setTime(minMonthDate.getTime())
 if (startMonthDate < minMonthDate) startMonthDate.setTime(minMonthDate.getTime())
 export const DEFAULT_MONTH_RANGE = [monthText(startMonthDate), monthText(endMonthDate)]
 
-// 默认查询条件
 export const DEFAULT_QUERY = {
-  level: 'country', // country | province | city
+  level: 'country',
   provinceCode: '',
   cityCode: '',
   provinceName: '',
-  // 下钻到的业务区域（蒙西/蒙东、冀北/河北南网）；非拆分省份为空
   regionName: '',
-  // 行业多选：选中项 = 分类 id 数组；空数组 = 全部（industry 传空）
-  // 必须在默认查询里声明：Vue 2 对 data 中不存在的新增属性不做响应式转换，
-  // 否则 query.categories 赋值后不会触发 reportKey / categorySelection 重算，表现为行业多选不生效
   categories: [],
-  // 月份区间 [startMonth, endMonth]，yyyy-MM；同样必须在默认查询里声明数组，
-  // 否则 monthrange 赋值不会触发 reportKey 重算（Vue 2 响应式限制）
   monthRange: DEFAULT_MONTH_RANGE.slice(),
   rankType: 'projectCount',
-  energyType: 'wind' // 风电 / 光伏 / 非标
+  energyType: 'wind'
 }
 
-// 层级根节点
 export const ROOT_LEVEL = { code: 'country', name: '全国' }
 
-// 省份字典：full=接口返回全称，name=地图短名，code=行政区划码（排名接口不返回 code，地图下钻加载省份 GeoJSON 需按 code）
-// capital：省会城市名 + 经纬度（供地图省会标记使用）
+// full=接口全称，name=地图短名，code=行政区划码
 export const PROVINCE_LIST = [
   { code: '110000', full: '北京市', name: '北京', capital: { name: '北京', lng: 116.41, lat: 39.9 }},
   { code: '120000', full: '天津市', name: '天津', capital: { name: '天津', lng: 117.2, lat: 39.13 }},
@@ -410,12 +337,11 @@ export const PROVINCE_LIST = [
   { code: '650000', full: '新疆维吾尔自治区', name: '新疆', capital: { name: '乌鲁木齐', lng: 87.62, lat: 43.82 }}
 ]
 
-// 省会标记点（地图用）：[{ name(省份短名), city(省会名), lng, lat }]
 export const PROVINCE_CAPITALS = PROVINCE_LIST
   .filter(p => p.capital)
   .map(p => ({ name: p.name, city: p.capital.name, lng: p.capital.lng, lat: p.capital.lat }))
 
-// 特殊省份拆分区域（业务规则）：下钻到内蒙古/河北时，省内排名/统计按拆分区域展示，不按地市
+// 内蒙古/河北下钻后按拆分区域统计，不按地市
 export const REGION_SPLIT = {
   内蒙古: [
     { name: '蒙西', cities: ['呼和浩特', '包头', '鄂尔多斯', '乌兰察布', '乌海', '巴彦淖尔', '锡林郭勒', '阿拉善'] },
@@ -427,12 +353,10 @@ export const REGION_SPLIT = {
   ]
 }
 
-// 城市名 → 所属拆分区域（蒙西/蒙东、冀北/河北南网）
-// 只用于下钻后的地图展示（接口数据不变），非拆分省份或未匹配返回 ''
 export function cityRegionName(provinceShortName, cityName) {
   const groups = REGION_SPLIT[provinceShortName]
   if (!groups || !cityName) return ''
-  // 去行政后缀后匹配（呼和浩特市→呼和浩特、锡林郭勒盟→锡林郭勒）
+  // 去行政后缀后匹配
   const name = String(cityName).replace(/(自治州|地区|市|盟|区|县)$/, '')
   if (!name) return ''
   const hit = groups.find(g => g.cities.some(c => {
@@ -442,12 +366,9 @@ export function cityRegionName(provinceShortName, cityName) {
   return hit ? hit.name : ''
 }
 
-// 区域名别名：接口/历史数据可能用别的叫法，统一归一到与地图 GeoJSON properties.name 一致的名称
-// （china.json 由 scripts/build-split-map.js 生成，区域名取自 REGION_SPLIT）
+// 接口/历史别名 → 地图 GeoJSON 区域名
 const REGION_ALIAS = { 冀南: '河北南网', 河北南: '河北南网', 蒙西电网: '蒙西', 蒙东电网: '蒙东' }
 
-// 区域字典：区域名 → { name, province(省短名), provinceFull(接口全称), code(行政码), cities }
-// 由 REGION_SPLIT 派生：地图过滤 feature、点位过滤、面包屑、下钻接口入参都从这里取
 export const REGION_META = (() => {
   const meta = {}
   Object.keys(REGION_SPLIT).forEach(province => {
@@ -465,7 +386,6 @@ export const REGION_META = (() => {
   return meta
 })()
 
-// 区域名归一（含别名）：是已知区域返回标准区域名，否则返回空字符串
 export function normalizeRegionName(name) {
   const key = String(name || '').trim()
   if (!key) return ''
@@ -474,38 +394,32 @@ export function normalizeRegionName(name) {
   return alias && REGION_META[alias] ? alias : ''
 }
 
-// 区域名 → 区域信息 { name, province, provinceFull, code, cities }；不是区域返回 null
 export function findRegion(name) {
   const normalized = normalizeRegionName(name)
   return normalized ? REGION_META[normalized] : null
 }
 
-// 下钻到拆分区域（蒙西/蒙东、冀北/河北南网）时，接口 provinceName 传什么：
-//   true  → 传区域名（后端按区域返回数据时用这个，与全国层级返回的区域 key 一致）
-//   false → 传省全称（内蒙古自治区/河北省），由前端按地市名过滤区域
+// true=下钻区域时 provinceName 传区域名，false=传省全称
 export const DRILL_REGION_AS_PROVINCE_NAME = true
 
-// 接口全称（山东省/内蒙古自治区）→ 地图短名（山东/内蒙古）
+// 接口全称 → 地图短名
 export function provinceShortName(fullName) {
   const name = String(fullName || '').trim()
   if (!name) return ''
   const hit = PROVINCE_LIST.find(p => p.full === name)
   if (hit) return hit.name
-  // 真实接口的项目 provinceName 可能是长地名（如「内蒙古自治区阿拉善左旗××风电场」），
-  // 按省份全称/短名前缀归一，保证与地图区域名（china.json）一致
   const prefix = PROVINCE_LIST.find(p => name.indexOf(p.full) === 0 || name.indexOf(p.name) === 0)
   if (prefix) return prefix.name
   return name.replace(/(省|市|自治区)$/, '')
 }
 
-// 经纬度兼容：真实接口可能返回逗号小数（"110,807"）或字符串数字，统一转 number；无效返回 null
+// 兼容逗号小数（"110,807"→110.807）与字符串数字
 export function toCoordNumber(value) {
   if (value === undefined || value === null || value === '') return null
   const n = parseFloat(String(value).trim().replace(/,/g, '.'))
   return isNaN(n) ? null : n
 }
 
-// 地图短名/全称 → 省份字典项（含 code/full/name）
 export function findProvince(name) {
   return PROVINCE_LIST.find(p => p.name === name || p.full === name)
 }

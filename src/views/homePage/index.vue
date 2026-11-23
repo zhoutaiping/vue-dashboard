@@ -1,6 +1,5 @@
 <template>
   <div class="home-page-container">
-    <!-- 顶部统计卡片区域 -->
     <el-row :gutter="16" class="stats-cards">
       <el-col :xs="24" :sm="12" :lg="6">
         <el-card class="stat-card" shadow="never">
@@ -191,7 +190,6 @@
       </el-col>
     </el-row>
 
-    <!-- 项目列表区域 -->
     <el-card class="project-table-card" shadow="never">
       <div slot="header" class="card-header">
         <span class="header-title">解除许可项目日常情况表</span>
@@ -353,7 +351,6 @@ export default {
   min-height: calc(100vh - 50px);
   background-image: url('./bg.png');
 
-  // 统计卡片区域
   .stats-cards {
     margin-bottom: 20px;
 
@@ -461,7 +458,6 @@ export default {
     }
   }
 
-  // 项目列表卡片
   .project-table-card {
     background: #fff;
     border: 1px solid #e8e8e8;
@@ -494,7 +490,6 @@ export default {
       }
     }
 
-    // 表格样式
     ::v-deep .el-table {
       border: none;
 
@@ -522,7 +517,6 @@ export default {
       }
     }
 
-    // 分页样式
     .pagination-wrapper {
       display: flex;
       align-items: center;
@@ -603,7 +597,6 @@ export default {
     }
   }
 
-  // 响应式设计
   @media (max-width: 1200px) {
     .stats-cards {
       .stat-card {

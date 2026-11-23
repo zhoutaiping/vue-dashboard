@@ -19,7 +19,6 @@
         class="rank-item"
         @click="handleRowClick(item)"
       >
-        <!-- 序号徽章：01红 / 02橙 / 03黄 / 其余浅蓝灰 -->
         <span class="rank-item__index" :class="rankClass(index)">{{ String(index + 1).padStart(2, '0') }}</span>
 
         <div class="rank-item__content">
@@ -27,7 +26,6 @@
             <span class="rank-item__name" :title="item.name">{{ item.name }}</span>
             <span class="rank-item__value" :class="[rankClass(index), { 'is-empty': item.isEmpty }]">
               {{ item.text }}
-              <!-- <em v-if="unit">{{ unit }}</em> -->
             </span>
           </div>
           <div class="rank-item__bar">
@@ -48,12 +46,7 @@
 </template>
 
 <script>
-/**
- * 通用排名列表（纯展示）
- * 字段名通过 fieldMap 自定义：{ name, value, code }
- * 排名维度（建设个数/达标率/...）由外部 tabs 传入，组件不写死业务
- * 样式：序号徽章 + 名称/数值 + 整行进度条；前三名红/橙/黄，其余蓝
- */
+/** 通用排名列表（纯展示）；字段映射通过 fieldMap 自定义 */
 export default {
   name: 'RankList',
   props: {
@@ -65,7 +58,6 @@ export default {
       default: () => ({ name: 'name', value: 'value', code: 'code' })
     },
     unit: { type: String, default: '' },
-    // 条形颜色，传入则覆盖默认渐变（一般不传，用内置名次配色）
     barColor: { type: String, default: '' },
     max: { type: Number, default: 0 },
     formatter: { type: Function, default: null }
@@ -83,7 +75,7 @@ export default {
         const raw = item[this.fieldMap.value]
         const value = Number(raw) || 0
         const percent = this.maxValue > 0 ? Math.round((value / this.maxValue) * 100) : 0
-        // 无值（null/undefined/空串）展示占位符 --；0 是有效值，照常显示 0，进度条按 0 处理
+        // 0 是有效值，仅 null/undefined/空串显示 --
         const isEmpty = raw === null || raw === undefined || raw === ''
         return {
           key: item[this.fieldMap.code] || index,
@@ -98,11 +90,9 @@ export default {
     }
   },
   methods: {
-    // 维度标签带上配置里的单位：项目个数(个)、达标率(%)……未配 unit 时只显示 label
     tabText(tab) {
       return tab.unit ? `${tab.label}(${tab.unit})` : tab.label
     },
-    // 名次修饰类：前三名 is-rank-1/2/3，其余走默认样式
     rankClass(index) {
       return index < 3 ? `is-rank-${index + 1}` : ''
     },
@@ -132,7 +122,6 @@ export default {
     border-bottom: 1px solid #f0f2f5;
   }
 
-  /* 按钮式 tab：选中蓝底白字；标签带单位后收紧间距，尽量保持一行 */
   &__tab {
     font-size: 12px;
     color: #606266;
@@ -155,7 +144,6 @@ export default {
     }
   }
 
-  /* 列表区：高度超出时内部滚动（min-height:0 是 flex 子项收缩的必要条件） */
   &__body {
     flex: 1;
     min-height: 0;
@@ -165,7 +153,6 @@ export default {
     padding: 8px;
     border-radius: 8px;
 
-    /* 滚动条默认不展示，鼠标移入列表时显示细滚动条 */
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
 
@@ -199,7 +186,6 @@ export default {
   }
 }
 
-/* 单行排名：徽章 + (名称/数值 + 整行进度条) */
 .rank-item {
   display: flex;
   align-items: flex-start;
@@ -293,7 +279,6 @@ export default {
     color: #f2c320;
   }
 
-  /* 无值占位（--）：不参与名次配色，用次要灰提示「无数据」 */
   &.is-empty {
     color: #c0c4cc;
     font-weight: 400;

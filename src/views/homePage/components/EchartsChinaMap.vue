@@ -2,7 +2,6 @@
   <div ref="wrap" class="echarts-china-map">
     <div ref="chart" class="echarts-china-map__canvas" />
 
-    <!-- 右上角：显示状态筛选（多选，时间控件下方） -->
     <div class="echarts-china-map__panel echarts-china-map__panel--build">
       <div
         v-for="item in buildOptions"
@@ -15,7 +14,6 @@
       </div>
     </div>
 
-    <!-- 右下角：补贴属性筛选（多选） -->
     <div class="echarts-china-map__panel echarts-china-map__panel--subsidy">
       <div
         v-for="label in subsidyOptions"
@@ -29,8 +27,6 @@
       </div>
     </div>
 
-    <!-- 左下角：颜色图例由 echarts visualMap 在画布内渲染；此处只保留结算电价菜单（单选，check/uncheck 图标）。
-         菜单与行业筛选无关，始终展示：不勾选任何电价维度时该维度不着色，菜单本身仍常驻可点 -->
     <div class="echarts-china-map__panel echarts-china-map__panel--legend">
       <div class="echarts-china-map__price">
         <div
@@ -45,7 +41,6 @@
       </div>
     </div>
 
-    <!-- 底部中间：返回（下钻省份时显示） + 全屏/退出全屏（同一时刻只展示一个） -->
     <div class="echarts-china-map__fs-bar">
       <div v-if="mapCode" class="echarts-china-map__fs-btn" @click="$emit('back')">
         <i class="el-icon-refresh-left" />返回
@@ -64,7 +59,6 @@
       地图加载中...
     </div>
 
-    <!-- 悬浮省份/市区跟随图标（原型：鼠标位置显示 province 图标，底尖对准鼠标） -->
     <img
       v-if="hoverIcon"
       class="echarts-china-map__hover-icon"
@@ -73,7 +67,6 @@
       alt=""
     >
 
-    <!-- 点位点击详情卡片（原型：白色卡片 + 更多>>；tag 文字为行业名、配色为补贴分类色；发电/非标两类字段不同） -->
     <div
       v-if="activePoint"
       ref="pointCard"
@@ -81,7 +74,6 @@
       :style="{ left: activePoint.x + 'px', top: activePoint.y + 'px', borderColor: pointCardColor }"
       @click.stop
     >
-      <!-- tag 底色随补贴分类色变化：用 CSS 变量下发，主体与右侧斜切角共用同一颜色 -->
       <div
         class="echarts-china-map__point-card-tag"
         :style="{ '--point-card-color': pointCardColor }"
@@ -115,7 +107,6 @@
 <script>
 import * as echarts from 'echarts'
 import { getChartDpr } from '../uiScale'
-// 全国底图采用「分区版」GeoJSON：内蒙古拆成 蒙西/蒙东、河北拆成 冀北/河北南网
 // 由 scripts/build-split-map.js 生成（地市面多边形合并），properties.name 即区域名
 import chinaJson from '@/assets/maps/china.json'
 import * as provinceMapLoaders from '@/assets/maps'
@@ -124,7 +115,6 @@ import { REGION_PRICE_COMPARE, POINT_PRICE_COMPARE, POINT_TIP, pointCategory, cl
 import { patchZoomPointer } from '../pointer'
 import priceIcon from '../price.png'
 
-// 注册中国地图（模块级只注册一次）
 echarts.registerMap('china', chinaJson)
 
 // 去掉行政后缀，用于区域内地市面匹配（呼和浩特市→呼和浩特、锡林郭勒盟→锡林郭勒）
@@ -137,57 +127,39 @@ const DEFAULT_COLOR = '#0088ff'
 const MAP_FILL_RATIO = 0.98
 // 可用区域的上下留白（px）：上方是分类/筛选条，下方是图例与全屏按钮
 const MAP_V_PADDING = 34
-// 浮动菜单距地图边缘的间距（px），与父级样式里的 --panel-gutter 保持一致
 const SIDE_GUTTER = 12
-// 省份 GeoJSON 未到位时「加载中遮罩」的延迟出现阈值（ms）：
 // 加载通常几十毫秒完成，立刻铺遮罩会让下钻闪一层灰；超过该时长才显示，真正慢加载仍有反馈
 const MAP_LOADING_DELAY = 250
 
-/**
- * 通用 echarts 2D 中国地图（打点 / 悬浮卡片 / 分类图例显隐 / 全屏）
- * 纯展示：点位、分类配色、悬浮字段全部由 props 传入，不含任何业务请求
- * 对外事件：point-click（点击点位）/ region-click（点击省份区域，用于下钻）
- */
 export default {
   name: 'EchartsChinaMap',
   mixins: [resize],
   props: {
-    // 点位数据：[{ id, name, lng, lat, category, ... }]
     points: { type: Array, default: () => [] },
     // 字段映射，后端字段改名只需改这里
     fieldMap: {
       type: Object,
       default: () => ({ id: 'id', name: 'name', lng: 'lng', lat: 'lat', category: 'category' })
     },
-    // 分类配色：[{ id, name, color }]
     categories: { type: Array, default: () => [] },
     defaultColor: { type: String, default: DEFAULT_COLOR },
     // 兼容旧接口：图层与已激活图层（此处用 echarts legend 控制显隐，prop 保留以便迁移）
     layers: { type: Array, default: () => [] },
     activeLayers: { type: Array, default: () => [] },
     showFullscreen: { type: Boolean, default: false },
-    // 左右浮层占位比例：宽屏 = 父级左右栏各占 25%（传 0.25）；窄屏纵向布局无遮挡（传 0）
     // 仅用于 echarts visualMap 的 px 定位（echarts 的 left 不支持 calc），
-    // 组件内浮动菜单的同类让位由 CSS 变量 --map-side-inset 控制，二者由父级同时下发
     sideRatio: { type: Number, default: 0.25 },
-    // 右上角状态筛选：可选项 + 已选中集合（.sync 双向，多选）
     buildOptions: { type: Array, default: () => [] },
     buildFilter: { type: Array, default: () => [] },
-    // 右下角补贴属性筛选：可选项 + 已选中集合（.sync 双向，多选）
     subsidyOptions: { type: Array, default: () => [] },
     subsidyFilter: { type: Array, default: () => [] },
-    // 补贴属性 → 图标 URL（点位按此渲染 station 图标）
     subsidyIcons: { type: Object, default: () => ({}) },
-    // 左下角估算电价（单选，.sync 双向）
     priceOptions: { type: Array, default: () => [] },
     priceType: { type: String, default: '' },
     // 各省着色数据：[{ name, value }]，由 visualMap 按 value 渐变着色（如电价）
     provinceData: { type: Array, default: () => [] },
-    // 省会标记点：[{ name, city, lng, lat }]（仅在有省会图标时渲染）
     capitals: { type: Array, default: () => [] },
-    // 省会图标 URL（svg/png）
     capitalIcon: { type: String, default: '' },
-    // 省会图标尺寸
     capitalSize: { type: Number, default: 16 },
     // 省份悬浮浮层数据：{ 省名: { field: value } }，移入省份区域弹出对应数据
     regionTooltipData: {
@@ -205,7 +177,6 @@ export default {
     pointDetail: { type: Object, default: null },
     // 点位详情接口加载中
     pointDetailLoading: { type: Boolean, default: false },
-    // 全屏按钮图标 { 1: 全屏, 2: 退出 }
     fullscreenIcons: { type: Object, default: () => ({}) }
   },
   data() {
@@ -213,9 +184,7 @@ export default {
       chart: null,
       loading: false,
       isFullscreen: false,
-      // 已加载过的地图缓存 { mapKey: true }
       mapCache: {},
-      // 点击点位弹出的详情卡片 { x, y, raw }，点击地图空白处关闭
       activePoint: null,
       // 悬浮省份/市区时的鼠标跟随图标（province.svg），移出区域隐藏
       hoverIcon: '',
@@ -230,16 +199,13 @@ export default {
       return this.region ? `${this.mapCode}|${this.region}` : this.mapCode
     },
     // 卡片所属分类：直接用地图 projectList 的 projectColor（蓝色=无补贴、绿色=已补贴），
-    // 不再读点位归一化后的 category/categoryName；颜色仍由 POINT_CATEGORIES 两色决定
     activePointCategory() {
       const raw = (this.activePoint && this.activePoint.raw) || {}
       return pointCategory(classifyProjectColor(raw.projectColor, raw))
     },
-    // 卡片主题色（边框 / tag 底色 / 数值与链接文字）：与打点同色
     pointCardColor() {
       return this.activePointCategory.color
     },
-    // 卡片标题左侧图钉：与右下角图例同一张 station 图标（无图标时退化为同色圆点）
     pointCardPin() {
       return this.subsidyIcons[this.activePointCategory.name] || ''
     },
@@ -271,9 +237,6 @@ export default {
       const power = detail.powerGenerationDetail || {}
       return power.status === '2'
     },
-    // 卡片行（原型交互13：发电项目与非标项目展示内容不一致）
-    // 发电项目：实控人/装机容量/发电利用小时数(达标率)/结算电价/补贴电价
-    // 非标项目：实控人/接入方式/生产及预警/项目规模/是否平台转发
     // 接口未返回时回退点位原始数据；字段值缺失（随项目状态差异）渲染为 --
     pointCardRows() {
       const raw = (this.activePoint && this.activePoint.raw) || {}
@@ -302,7 +265,6 @@ export default {
       // 结算电价优先取详情（兼容历史 editWindPrice），详情无值时回退点位数据
       const settleRaw = pickPriceValue(p, POINT_PRICE_COMPARE.priceFields)
       const settle = settleRaw === null ? pickPriceValue(raw, [POINT_TIP.valueField]) : settleRaw
-      // 结算电价 - Spot结算电价：只展示差值绝对值，> 0 向上箭头、< 0 向下箭头、= 0 无箭头
       // 任一字段缺失或非数值时不渲染括号，避免出现「--（0.0000）」这类空差值
       const spot = pickPriceValue(p, POINT_PRICE_COMPARE.spotField)
       let settleSub = ''
@@ -349,12 +311,10 @@ export default {
     mapKey() {
       this.loadRegionMap()
     },
-    // 全屏切换：图例位置需复位到贴边
     isFullscreen() {
       this.renderOption()
     },
     // 宽屏 ↔ 窄屏布局切换：地图容器宽度不变（都通栏），ResizeObserver 不会触发，
-    // 需单独重排图例位置（等布局完成后再取容器宽度）
     sideRatio() {
       this.syncLegendPosition()
     }
@@ -396,8 +356,6 @@ export default {
   },
   methods: {
     // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径：
-    // 宽屏有左右浮层 → 让开「浮层外边距 12 + 浮层宽 + 浮层与地图间距 12」；
-    // 窄屏无浮层 → 只留一个 12px 边距
     calcSideInset() {
       const width = this.chart ? this.chart.getWidth() : 0
       const gutter = this.sideRatio > 0 ? SIDE_GUTTER * 2 : SIDE_GUTTER
@@ -407,7 +365,6 @@ export default {
     resize() {
       const el = this.$refs.chart
       // 组件销毁过程 / 容器已被移除（宽高为 0）时不能再 resize：
-      // ECharts 会在零尺寸下重建 geo 坐标系，内部变换矩阵为 null 直接抛错
       if (this._mapDestroyed || !this.chart || !el || !el.clientWidth || !el.clientHeight) return
       // 页面整体缩放变了（窗口跨 1080P/2K/4K 档位）：画布像素比得重建，直接 resize 会糊
       if (this.chartDpr !== getChartDpr()) {
@@ -419,20 +376,16 @@ export default {
       // 尺寸变化后重新自适应放大（比例变了，原来的 zoom 会留白或溢出）
       this.fitMapZoom()
       const left = this.calcSideInset()
-      // 宽度没变时不重复 setOption，避免连续拖拽缩放期间的无谓重绘
       if (left === this._legendLeft) return
       this._legendLeft = left
       this.chart.setOption({ visualMap: { left }})
     },
-    // 布局模式切换（宽屏 ↔ 窄屏）后重排：等 DOM 回流完成再取容器宽度
     syncLegendPosition() {
       this.$nextTick(() => this.resize())
     },
     // 底座跟随主图：把主图当前的 zoom/center 原样写入底座的模型与坐标系。
     // 不用「转发相对增量」：两层 viewRect 有 layoutCenter 偏移，相同的 dx/dy/zoom 增量
-    // 在各自投影下算出的 center 有微小差异，会随缩放累积放大导致底座漂移。
     // 直接对齐绝对值可保证任意层级下两层严格重合，屏幕间距恒等于 layoutCenter 偏移。
-    // 全程只读模型/坐标系，不走 getOption + setOption（避免深拷贝与全量更新造成的卡顿）。
 
     initChart() {
       // 大屏 zoom 适配：画布像素比要乘上页面缩放系数，否则 4K 下地图被拉伸发虚
@@ -442,7 +395,6 @@ export default {
       this.chart.on('click', this.handleClick)
       // 主图缩放/平移时同步灰色底座：微任务中执行，与主图在同一帧重绘，视觉上完全同步
       this.chart.on('georoam', (params) => {
-        // 只处理主地图的缩放、拖动事件，避免底座事件重复转发
         if (!params || params.geoId !== 'mapMain') return
 
         const action = {
@@ -462,23 +414,17 @@ export default {
 
         this.chart.dispatchAction(action)
       })
-      // 悬浮省份/市区时在鼠标处显示 province 图标（原型效果）；指向点位或移出地图时隐藏
       // 注意：区域命中的事件归属是绑定了 geoIndex 的 map series（componentType='series'、
-      // componentSubType='map'），并非 'geo'，因此两种来源都要覆盖
       this.chart.on('mousemove', params => {
         const isRegion = params.componentType === 'geo' || params.componentSubType === 'map'
         if (isRegion && this.capitalIcon) {
           const ev = params.event || {}
-          // 图标底尖对准鼠标位置
           this.hoverIconPos = { x: (ev.offsetX || 0) - 16, y: (ev.offsetY || 0) - 32 }
           this.hoverIcon = this.capitalIcon
         } else if (this.hoverIcon) {
           this.hoverIcon = ''
         }
       })
-      // 画布级 mousemove 兜底：chart.on('mousemove') 是命中代理事件，只在悬停到省份/点位上
-      // 才派发；鼠标移到画布空白处（无命中元素）时不会触发上面的 else 清理分支，
-      // 图标会残留在最后悬浮的省份位置。zrender 原生事件始终派发，无命中元素即清除
       this.chart.getZr().on('mousemove', e => {
         if (!e.target && this.hoverIcon) this.hoverIcon = ''
       })
@@ -487,26 +433,20 @@ export default {
       })
       this.bindFullscreen()
       // 全局兜底（捕获阶段）：鼠标跟随图标只在指针位于本地图画布上时展示；
-      // 点位弹窗在指针离开整个地图容器时关闭（弹窗本身在容器内，可正常交互）
-      // zrender 的 mousemove/globalout 在「移到 DOM 覆盖层（菜单/面板/卡片）」「快速移出窗口」
-      // 「页面滚动」等场景下不再派发，图标/弹窗会残留，这里统一兜底清理
       this._onDocMove = e => {
         const t = e.target
         const wrap = this.$refs.wrap
         const onCanvas = !!(t && t.tagName === 'CANVAS' && wrap && wrap.contains(t))
         if (!onCanvas && this.hoverIcon) this.hoverIcon = ''
-        // 弹窗关闭判定：是否还在地图容器内（含容器内的浮层/卡片）
         const insideWrap = !!(wrap && (wrap === t || (t && wrap.contains(t))))
         if (!insideWrap && this.activePoint) this.activePoint = null
       }
-      // 移出浏览器窗口：mouseout 且 relatedTarget 为空
       this._onDocOut = e => {
         if (!e.relatedTarget && !e.toElement) {
           if (this.hoverIcon) this.hoverIcon = ''
           if (this.activePoint) this.activePoint = null
         }
       }
-      // 页面滚动：指针相对地图位置变化（弹窗定位坐标失效），直接清理
       this._onAnyScroll = () => {
         if (this.hoverIcon) this.hoverIcon = ''
         if (this.activePoint) this.activePoint = null
@@ -515,7 +455,6 @@ export default {
       document.addEventListener('mouseout', this._onDocOut, true)
       window.addEventListener('scroll', this._onAnyScroll, true)
       window.addEventListener('blur', this._onAnyScroll)
-      // 容器 mouseleave 直连兜底：zrender 事件被 DOM 覆盖层拦截时仍能触发
       this._onMapLeave = () => {
         if (this.hoverIcon) this.hoverIcon = ''
         if (this.activePoint) this.activePoint = null
@@ -531,7 +470,6 @@ export default {
       }
       document.addEventListener('click', this._onDocClick, true)
     },
-    // 解绑全局兜底事件（与 initChart 内绑定成对）
     unbindWrapEvents() {
       if (this._onDocMove) document.removeEventListener('mousemove', this._onDocMove, true)
       if (this.$refs.wrap && this._onMapLeave) this.$refs.wrap.removeEventListener('mouseleave', this._onMapLeave)
@@ -547,14 +485,10 @@ export default {
       this._onAnyScroll = null
       this._onDocClick = null
     },
-    // 加载并注册当前层级的地图 GeoJSON（本地文件，webpack 动态 import 按需加载异步 chunk），成功后重绘
-    //   mapKey = 'china'                 → 全国分区底图（模块级已注册）
-    //   mapKey = '{code}'                → 整省地市图
     //   mapKey = '{code}|{region}'       → 只含该业务区域（蒙西/蒙东、冀北/河北南网）地市的图
     async loadRegionMap() {
       const key = this.mapKey
       if (key === 'china') {
-        // 返回全国
         this.renderOption()
         return
       }
@@ -562,14 +496,10 @@ export default {
         this.renderOption()
         return
       }
-      // 加载遮罩延时出现：省份 GeoJSON 是本地 chunk，通常几十毫秒就到位，
       // 立刻铺遮罩会在下钻瞬间闪一层灰（地图越流畅越明显）；超过阈值才显示，慢加载仍有反馈。
-      // 与 finally 里的 loading=false 配合，保证遮挡时间 = 加载耗时 - 阈值
       this._maskTimer = setTimeout(() => { this.loading = true }, MAP_LOADING_DELAY)
       try {
-        // 本地 GeoJSON 位于 src/assets/maps/{code}.json（scripts/download-map-data.js 下载，文件名去掉 _full）
         // 走静态映射表（map/index.js）：
-        //   开发环境 babel-plugin-dynamic-import-node 会把「带变量的 import()」降级为 require 表达式，
         //   webpack 无法静态收集上级目录模块，运行时报 Cannot find module，因此这里不能用 import(`../map/${code}_full.json`)
         //   静态路径映射两种环境都能解析，生产构建会拆成独立的异步 chunk，按需加载不占首屏体积
         // 兼容不同编译环境的模块互操作（default 导出可能被 interop 包一层）
@@ -602,18 +532,13 @@ export default {
         const name = stripSuffix(feature && feature.properties && feature.properties.name)
         return wanted.indexOf(name) >= 0
       })
-      // 一个都没匹配上说明配置与 GeoJSON 不一致：回退整省，至少不出现空地图
       if (!features.length) {
         console.warn('区域地市与地图数据未匹配，回退为整省地图:', this.region, this.regionCities)
         return provinceGeoJson
       }
       return Object.assign({}, provinceGeoJson, { features })
     },
-    // 按分类分组为多个 scatter series，每个分类一种颜色
-    // 点位若带补贴属性图标（subsidyIcons = station-1/2，蓝=无补贴 / 绿=已补贴），
-    // 用对应 station 图片作为 symbol（图片自带配色，与右下角图例共用同一套图标）
     // symbolSize 必须用数字：数组尺寸会让 zrender 走 scale 缩放渲染（style.width=2 + scale），
-    // zrender 4 的 Image.contain 不做 transform 逆变换，该形态下鼠标命中/悬浮全部失效
     buildSeries() {
       const groups = {}
       this.points.forEach(p => {
@@ -636,7 +561,6 @@ export default {
       })
 
       const known = new Set(this.categories.map(c => c.id))
-      // 分类色用于未配置图标时的圆点兜底（带图标的点位颜色由 station 图片自带）
       const series = this.categories.map(c => ({
         name: c.name,
         type: 'scatter',
@@ -654,7 +578,6 @@ export default {
         data: groups[c.id] || []
       }))
 
-      // 兜底：分类不在 categories 中的点位
       const others = []
       Object.keys(groups).forEach(k => { if (!known.has(k)) others.push(...groups[k]) })
       if (others.length) {
@@ -678,7 +601,6 @@ export default {
         name: '省份电价',
         type: 'map',
         map: mapName,
-        // 与索引 1 的主 geo 组件共享坐标系（geo[0] 是灰色底座；roam 由 geo 驱动，底图与散点随之同步）
         geoIndex: 1,
         // 显示省份名称（点击省份可下钻）
         label: {
@@ -688,21 +610,17 @@ export default {
         },
         itemStyle: {
           // 有电价数据时颜色由 visualMap 接管；下钻到省后无省级着色、全国未选电价时也用灰白底
-          // 仅「全国视图 + 未选电价」保持纯白无热力（交互7）
           areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
           // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
-          // 有底色时用白色细线；纯白底 (全国 + 未选电价) 白线会完全看不见，改用浅灰细线
           borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
           borderWidth: 1.5
         },
         emphasis: {
           itemStyle: {
-            // 悬浮：省份填充透明绿、边框变绿并加粗
             areaColor: 'rgba(0, 200, 0, 0.18)',
             borderColor: '#00c800',
             borderWidth: 2.5
           },
-          // 悬浮时省份名保持显示（透明绿底上深色文字）
           label: { show: true, color: '#1a5c1a', fontWeight: 600 }
         },
         data: hasColor ? this.provinceData : []
@@ -710,15 +628,11 @@ export default {
     },
     renderOption() {
       if (this._mapDestroyed || !this.chart) return
-      // GeoJSON 异步加载未完成时（省地图尚未注册）先渲染全国，避免 setOption 使用未注册的 map 名报错
       const mapName = this.mapKey !== 'china' && this.mapCache[this.mapKey] ? this.mapKey : 'china'
       const values = (this.provinceData || []).map(d => Number(d.value) || 0)
-      // 未选电价维度 → 无着色数据：地图纯白、隐藏图例（交互7）
       const hasColor = values.length > 0
       const min = hasColor ? Math.min(...values) : 0
       const max = hasColor ? Math.max(...values) : 0
-      // 图例左缘对齐「左侧浮层右缘 + 间距」：按容器宽度百分比动态计算，不再写死 px
-      // （echarts 的 left 不支持 calc，故由 sideRatio × 容器宽 + 间距 得出）
       const legendLeft = this.calcSideInset()
       this._legendLeft = legendLeft
 
@@ -729,7 +643,6 @@ export default {
         tooltip: {
           trigger: 'item',
           confine: true,
-          // 浮层常驻鼠标正上方：水平居中于鼠标，底部留出 province 跟随图标的高度；
           // 上方空间不足时落到鼠标下方，左右再按容器宽度收敛，避免溢出
           position: (point, params, dom, rect, size) => {
             const gap = 38
@@ -742,16 +655,13 @@ export default {
             x = Math.max(4, Math.min(x, viewWidth - contentWidth - 4))
             return [x, y]
           },
-          // 深色胶囊样式由 formatter 内联实现（原型效果），外层容器置透明
           backgroundColor: 'transparent',
           borderWidth: 0,
           padding: 0,
           extraCssText: 'box-shadow: none;',
           formatter: params => {
             // 区域悬浮（交互8）：电价 + 与 spot 均价的差值
-            // 差值 > 0 → 绿色 + 向下箭头；< 0 → 红色 + 向上箭头
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
-            // 左下角电价菜单选中某一项 → 只展示该项对应的电价；未选中（''）→ 展示全部
             if (params.seriesType === 'map' || params.componentType === 'geo') {
               const data = this.regionTooltipData[params.name]
               const selected = this.priceOptions.find(o => o.id === this.priceType)
@@ -763,17 +673,14 @@ export default {
                   // 取值兼容：avgXxx 为 null 时回退 xxx 字段，字符串数值（"0.4155"）可解析
                   const v = data ? pickPriceValue(data, item.fields || item.field) : null
                   const hasV = v !== null
-                  // 每行前置价格图标（原型：icon + 电价）
                   const icon = `<img src="${priceIcon}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
                   const priceHtml = `${icon}<b>${hasV ? v : '--'}</b>`
-                  // noDiff：标杆电价本身取自 spot，无独立 spot 均价可比，只展示数值不展示差值
                   if (item.noDiff) return priceHtml
                   const spot = data ? pickPriceValue(data, item.spotField) : null
                   const hasSpot = spot !== null
                   const vn = Number(v)
                   const sn = Number(spot)
                   // 差值所需字段为 null / 空（pickPriceValue 已把 "" 归一为 null）时无法计算，
-                  // 直接不渲染括号，避免出现「0（--）」这种空括号
                   if (!hasV || !hasSpot || isNaN(vn) || isNaN(sn)) return priceHtml
                   const diff = Math.round((vn - sn) * 100) / 100
                   let diffHtml
@@ -798,17 +705,13 @@ export default {
         },
         // geo 承担区域绘制：map series 与 geo 共享坐标系（geoIndex）时不绘制图形（MapView.render 直接 return），
         // 仅承载数据供 visualMap 着色（着色通过 series 数据写入 geo regions）；因此底图/悬浮/标签样式都配在 geo 上
-        // geo[0] = 灰色底座（伪 3D 立体轮廓，数组靠前先绘制、垫在底层）；geo[1] = 主地图，系列与交互均指向 geo[1]
         geo: [
           {
-            // 灰色底座轮廓：与主图同形同尺寸，屏幕位置整体右移/下移，形成倾斜立体底座
             id: 'mapShadow',
             map: mapName,
             layoutCenter: ['50%', '49%'],
             layoutSize: '103%',
-            // 初始缩放与主图一致；此后由 georoam 事件转发同一相对变换保持对齐
             zoom: 0.8,
-            // 与主图相同的缩放上下限，避免到达极值被单向截断导致两层错开
             scaleLimit: { min: 0.4, max: 2 },
             // roam 关闭：底座的 roam 控制器始终会因「指针压在主图区域上」
             // 被 onIrrelevantElement 判定为不相关而永不触发，跟随必须由主图事件转发完成
@@ -822,7 +725,6 @@ export default {
             }
           },
           {
-            // roam 事件与转发均以 id 标识主图
             id: 'mapMain',
             // 全国地图 / 下钻后的省市区县地图（mapCode 为空时回全国）
             map: mapName,
@@ -832,14 +734,12 @@ export default {
             roam: true,
             zoom: 0.8,
             scaleLimit: { min: 0.4, max: 2 },
-            // 显示省名 / 区县名
             label: { show: true, color: '#303133', fontSize: 12 },
             itemStyle: {
               // 有电价着色或已下钻到省 → 灰白底；全国未选电价 → 纯白无热力（交互7）
               // 区域绘制实际取 geo 样式，此处与 buildMapSeries 保持一致
               areaColor: hasColor || this.mapCode ? '#f0f2f5' : '#ffffff',
               // 区域之间只用细界线区分，不带投影（原 shadowColor/shadowBlur/shadowOffsetY 已移除）：
-              // 有底色时用白色细线；纯白底（全国 + 未选电价）白线会看不见，改用浅灰细线
               borderColor: hasColor || this.mapCode ? '#ffffff' : '#e6e9ef',
               borderWidth: 1.5
             },
@@ -850,40 +750,32 @@ export default {
                 borderColor: '#00c800',
                 borderWidth: 2.5
               },
-              // 悬浮时名称保持显示（透明绿底上深色文字）
               label: { show: true, color: '#1a5c1a', fontWeight: 600 }
             }
           }
         ],
         // 左下角颜色图例：改用 echarts visualMap（连续型），与地图着色同源
         // 无数据占位：选中了电价维度但接口无数据（如下钻省份全部为 0）时，
-        // 图例仍显示（高/低），色阶置灰，避免左下角空缺；未选电价维度才完全隐藏（交互7）
         visualMap: hasColor
           ? {
             type: 'continuous',
-            // 作用于底图系列（series 中第 0 项）
             seriesIndex: 0,
             min,
-            // 最小=最大时给微量跨度，避免 echarts 区间退化
             max: max === min ? min + 0.01 : max,
             orient: 'vertical',
             left: legendLeft,
             bottom: 12,
             itemWidth: 16,
             itemHeight: 160,
-            // 纯图例，不显示可拖动手柄
             calculable: false,
-            // 条上端「高」、下端「低」
             text: ['高', '低'],
             textStyle: { color: '#303133', fontSize: 12 },
-            // 色阶：浅蓝 → 深蓝（与地图着色一致）
             inRange: { color: ['#d6e8ff', '#7db9ff', '#0088ff'] }
           }
           : (this.priceType
             ? {
               type: 'continuous',
               seriesIndex: 0,
-              // 默认占位区间 0~1，仅作视觉占位，不参与着色（此时系列 data 为空）
               min: 0,
               max: 1,
               orient: 'vertical',
@@ -897,21 +789,16 @@ export default {
               inRange: { color: ['#f0f2f5', '#f0f2f5'] }
             }
             : { show: false }),
-        // 分类筛选已由顶部 CategoryTabs 承担，且底部中间需留给全屏按钮，故关闭内置图例
         legend: { show: false },
         series: [this.buildMapSeries(mapName, hasColor)].concat(this.buildSeries())
       }
       this.chart.setOption(option, true)
-      // 每次重绘后按容器比例重新自适应放大（切换省份、全屏、数据刷新都走这里）
       this.fitMapZoom()
     },
-    // 地图默认自适应放大：按地图实际绘制包围盒把主图缩放到容器填充率（原型默认铺满）。
     // 不做这一步时 zoom 固定 0.8，宽屏/窄屏/全屏下地图都缩在中部、四周留大片空白
     fitMapZoom() {
       const el = this.$refs.chart
-      // 零尺寸容器下 setOption 会让 geo 重算变换失败，直接跳过本次自适应
       if (this._mapDestroyed || !this.chart || this._fitting || !el || !el.clientWidth || !el.clientHeight) return
-      // 按 id 找主图模型：getComponent 的第二个参数只认下标，这里遍历更稳
       let geoModel = null
       this.chart.getModel().eachComponent('geo', model => {
         if (model.id === 'mapMain') geoModel = model
@@ -934,7 +821,6 @@ export default {
       })
       if (!isFinite(minX) || !isFinite(maxX)) return
       // 经纬盒 → 像素：convertToPixel 走的是含 layoutCenter / layoutSize / zoom 的完整变换，
-      // 换成 coord.dataToPoint 拿到的只是投影尺寸，不含布局缩放，会算出离谱的放大倍数
       const p0 = this.chart.convertToPixel({ geoIndex: 1 }, [minX, minY])
       const p1 = this.chart.convertToPixel({ geoIndex: 1 }, [maxX, maxY])
       if (!p0 || !p1) return
@@ -971,9 +857,6 @@ export default {
       })
       this._fitting = false
     },
-    // tooltip 深色胶囊外壳（原型效果）：所有系列统一包裹
-    // 电价气泡外壳：深色胶囊。圆角 14px ≈ 单行气泡高度的一半，左右两端呈半圆（原型效果）；
-    // 三行（取消电价维度选择时）则为圆角矩形，不会撑成怪异的大胶囊
     wrapTooltip(html) {
       return `<div style="background: rgba(23, 35, 54, 0.9); color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12px; line-height: 1.6; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); white-space: nowrap;">${html}</div>`
     },
@@ -981,7 +864,6 @@ export default {
       if (params.seriesType === 'scatter') {
         const raw = params.data && params.data.raw
         if (raw) {
-          // 详情卡片出现在点位右上方，并收敛在容器边界内
           const ev = params.event || {}
           const cardWidth = 300
           const wrap = this.$refs.wrap
@@ -1004,8 +886,6 @@ export default {
     toggleFullscreen() {
       this.setFullscreen(!this.isFullscreen)
     },
-    // 全屏作用于「整个页面」容器（首页总览根节点），页面上的左右面板、工具栏等功能保持可见；
-    // 之前对地图容器自身全屏，会让页面其余功能被全屏元素遮盖
     setFullscreen(flag) {
       const pageRoot = (this.$el && this.$el.closest && this.$el.closest('.home-overview')) || null
       if (flag) {
@@ -1015,7 +895,6 @@ export default {
         document.exitFullscreen ? document.exitFullscreen() : null
       }
     },
-    // 状态筛选（多选 toggle），集合由父级持有（.sync）
     toggleBuild(id) {
       const next = this.buildFilter.includes(id)
         ? this.buildFilter.filter(v => v !== id)
@@ -1067,7 +946,6 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  /* 地图背景图（bg.png，位于 views/homePage 同级） */
   background: #f5f7fa url('../bg.png') center / cover no-repeat;
 
   &__canvas {
@@ -1095,7 +973,6 @@ export default {
     }
   }
 
-  /* 通用浮动面板 */
   &__panel {
     position: absolute;
     z-index: 10;
@@ -1107,10 +984,7 @@ export default {
     color: #fff;
   }
 
-  /* 浮动菜单避让父级左右浮层：--map-side-inset 由父级下发
-     （宽屏 = 浮层占比 + 间距，如 calc(25% + 12px)；窄屏 = 仅间距），随页面宽度动态变化 */
   &__panel--build {
-    /* 宽屏落在顶部工具条（月份选择器）下方，窄屏工具条在文档流中，由父级改为贴边 */
     top: var(--map-panel-top, 60px);
     right: var(--map-side-inset, 12px);
   }
@@ -1128,32 +1002,27 @@ export default {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
-    /* 原型无卡片底：直接铺在地图上 */
     padding: 0;
     background: transparent;
     box-shadow: none;
   }
 
-  /* 多选行：勾选框 / 图标 + 文案（面板是半透明灰蓝底，文字统一用白色） */
   &__check {
     display: flex;
     align-items: center;
     padding: 4px 6px;
     border-radius: 4px;
     font-size: 13px;
-    /* 未选中同样是白字：深色字压在半透明灰蓝底上对比不足，且与面板 color:#fff 不统一 */
     color: rgba(255, 255, 255, 0.75);
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
 
     &:hover {
-      /* 白色浮层：原来的浅灰底会把白字吃掉 */
       background: rgba(255, 255, 255, 0.16);
     }
 
     &.is-active {
-      /* 选中态：纯白 + 加粗，与未选中的 75% 白形成层级 */
       color: #fff;
       font-weight: 600;
     }
@@ -1170,7 +1039,6 @@ export default {
     flex-shrink: 0;
 
     .is-active > & {
-      /* 勾选态用绿色（Element success #67c23a，与页面其它绿色标识一致），不用主题蓝 */
       background: #67c23a;
       border-color: #67c23a;
 
@@ -1196,7 +1064,6 @@ export default {
     flex-shrink: 0;
   }
 
-  /* 结算电价（单选）：选中蓝色胶囊白字，未选中半透明灰底白字（蓝湖标注 rgba(96,105,127,0.3)） */
   &__price {
     display: flex;
     flex-direction: column;
@@ -1234,7 +1101,6 @@ export default {
     box-sizing: border-box;
     flex-shrink: 0;
 
-    /* 中心圆点 */
     &::after {
       content: '';
       position: absolute;
@@ -1248,7 +1114,6 @@ export default {
     }
   }
 
-  /* 底部中间：全屏 / 退出全屏（左右浮层等宽，容器中点即可视区中点） */
   &__fs-bar {
     position: absolute;
     left: 50%;
@@ -1289,7 +1154,6 @@ export default {
     font-size: 13px;
   }
 
-  /* 悬浮省份/市区的鼠标跟随图标：不拦截任何鼠标事件 */
   &__hover-icon {
     position: absolute;
     width: 30px;
@@ -1298,7 +1162,6 @@ export default {
     z-index: 5;
   }
 
-  /* 点位点击详情卡片（原型：白色卡片、橙色主题边框） */
   &__point-card {
     position: absolute;
     width: 300px;
@@ -1312,14 +1175,12 @@ export default {
     z-index: 20;
   }
 
-  /* 项目类型 tag：定位在卡片顶部，骑在边框上（上半截在卡片外），不占卡片布局高度 */
   &__point-card-tag {
     position: absolute;
     top: -27px;
     left: -2px;
     height: 27px;
     padding: 0 14px;
-    /* 颜色由模板内联的 --point-card-color 下发（补贴分类色），斜切角共用同一值 */
     background: var(--point-card-color, #008cff);
     color: #fff;
     border-radius: 6px 10px 0 0;
@@ -1357,7 +1218,6 @@ export default {
     flex-shrink: 0;
   }
 
-  /* 无 station 图标时的同色圆点兜底（与打点、边框同色） */
   &__point-card-dot {
     width: 10px;
     height: 10px;

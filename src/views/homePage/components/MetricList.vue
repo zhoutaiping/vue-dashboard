@@ -3,7 +3,6 @@
     <div v-for="(item, index) in normalizedItems" :key="index" class="metric-item">
       <div v-if="showIcon && item.icon" class="metric-item__icon">
         <img :src="item.icon" alt="">
-        <!-- <i v-else :class="item.icon" /> -->
       </div>
       <div class="metric-item__main">
         <div class="metric-item__label">
@@ -20,28 +19,18 @@
 </template>
 
 <script>
-/**
- * 通用指标列表（纯展示）
- * 字段名可通过 fieldMap 自定义，后端字段改名无需改组件
- * variant：
- *  - default：紧凑纯文字（label 上 / value 下）
- *  - stat：横向大指标块（圆形图标 + label + 蓝色大数值），用于卡片顶部概览
- *  - card：带边框小卡片（图标 + label + 蓝色数值），用于指标网格
- */
+/** 通用指标列表（纯展示）；字段映射通过 fieldMap 自定义 */
 export default {
   name: 'MetricList',
   props: {
     items: { type: Array, default: () => [] },
-    // 字段映射：{ label, value, unit, color, icon, trend }
     fieldMap: {
       type: Object,
       default: () => ({ label: 'label', value: 'value', unit: 'unit', color: 'color', icon: 'icon', trend: 'trend' })
     },
     columns: { type: Number, default: 2 },
     valueColor: { type: String, default: '#303133' },
-    // 展示形态：default / stat / card
     variant: { type: String, default: 'default' },
-    // 自定义数值格式化
     formatter: { type: Function, default: null }
   },
   computed: {
@@ -64,7 +53,6 @@ export default {
     }
   },
   methods: {
-    //
   }
 }
 </script>
@@ -84,7 +72,6 @@ export default {
   padding: 6px 4px;
   box-sizing: border-box;
 
-  /* 文本区：占满剩余宽度，允许内部换行 */
   &__main {
     flex: 1;
     min-width: 0;
@@ -116,7 +103,6 @@ export default {
     color: inherit;
   }
 
-  /* 趋势箭头：数值同色、稍小，紧跟数值 */
   &__trend {
     display: inline-flex;
     align-items: center;
@@ -126,7 +112,6 @@ export default {
   }
 }
 
-/* 顶部概览大指标块：图标 + label 上 / 蓝色大数值下（两行排布） */
 .metric-list.is-stat {
   gap: 12px;
   .metric-item {
@@ -156,7 +141,6 @@ export default {
     }
   }
 
-  /* label 在上、value 在下，label 不折行 */
   .metric-item__main {
     flex-direction: column;
     align-items: flex-start;
@@ -174,14 +158,12 @@ export default {
   }
 }
 
-/* 紧凑纯文字：label 上 / value 下 */
 .metric-list.is-default .metric-item__main {
   flex-direction: column;
   align-items: flex-start;
   gap: 0;
 }
 
-/* 指标小卡片网格：带边框圆角 */
 .metric-list.is-card {
   margin: -4px;
 
@@ -189,7 +171,6 @@ export default {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    /* 默认两列并排；内容放不下（超出半行宽）时禁止压缩，整项换到单独一行铺满 */
     flex: 1 1 calc(50% - 8px);
     min-width: max-content;
     margin: 4px;
@@ -217,7 +198,6 @@ export default {
     }
   }
 
-  /* 图标 + label + value 同行，间距紧凑 */
   .metric-item__main {
     gap: 6px;
   }

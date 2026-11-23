@@ -5,7 +5,6 @@
     :style="{ '--ui-scale': uiScale }"
   >
     <div class="home-overview__body">
-      <!-- 地图铺满底层 -->
       <div class="home-overview__map">
         <EchartsChinaMap
           :points="visiblePoints"
@@ -39,7 +38,6 @@
         />
       </div>
 
-      <!-- 顶部悬浮工具条：左列行业 tabs（可换行）+ 右列月份选择（固定右上角） -->
       <div class="home-overview__toolbar">
         <div class="home-overview__toolbar-left">
           <CategoryTabs
@@ -51,10 +49,6 @@
           />
         </div>
         <div class="home-overview__toolbar-right">
-          <!-- append-to-body 必须关掉：element-ui 默认把日期面板挂到 document.body，
-               而全屏是以 .home-overview 为全屏元素，全屏时 body 上的其它子元素不参与渲染，
-               面板会「点了不出现」（不是被遮挡，是根本不在全屏层里）。
-               关掉后面板留在日期选择器内部，属于全屏元素子树，全屏下照样正常弹出 -->
           <el-date-picker
             v-model="query.monthRange"
             class="month-range-picker"
@@ -72,15 +66,10 @@
         </div>
       </div>
 
-      <!-- 左侧浮层：项目总览 + 地区排名（内容区滚动）+ 底部备注（固定不遮挡） -->
       <div class="home-overview__col home-overview__col--left">
         <div class="home-overview__left-scroll">
           <PanelCard title="项目总览" :sub-title="regionTitle" class="panel-block">
             <MetricList :items="overviewMetrics" :columns="2" variant="stat" value-color="#08f" />
-            <!-- 环形图（donut）：各扇区等半径，占比只靠圆心角表达（不传 rose-type），
-                 圆心角/环宽随容器尺寸自适应，见 ChartPie.pieGeometry。
-                 纯展示图表：不监听 item-click，点扇区不会改变顶部行业筛选。
-                 无数据（行业全不选时接口不取数）走空态文案，避免 echarts 画出灰色空环 -->
             <ChartPie
               v-if="pieData.length"
               :data="pieData"
@@ -110,7 +99,6 @@
         </div>
       </div>
 
-      <!-- 右侧浮层：趋势图 + 指标 + 项目列表 -->
       <div class="home-overview__col home-overview__col--right">
         <PanelCard :title="manageTitle" :sub-title="regionTitle" class="panel-block">
           <ChartBarLine
@@ -218,26 +206,11 @@ import {
 import provinceIcon from '../province.svg'
 import { calcUiScale } from '../uiScale'
 
-// 布局分档（px，按页面主体宽度判定）：
-//   < 1024      → 纵向堆叠（「工具条 → 左栏 → 地图 → 右栏」，真放不下三栏时才开始整页滚动）
-//   1024 ~ 1440 → 三栏 + 浮层加宽到 28%（1300~1400 是「1920 屏开侧边 DevTools」「1366 笔记本」的常见可用宽度，
-//                 按 25% 只剩 270px 左右，卡片标题会与操作按钮挤在一起）
-//   ≥ 1440      → 三栏 + 浮层 25%
-// 旧阈值 1280 会把上面这类桌面窗口误判成移动端堆叠
 const NARROW_LAYOUT_WIDTH = 1024
 const MEDIUM_LAYOUT_WIDTH = 1440
-
-// 左右浮层宽度占比（与样式里的 --panel-width 保持一致）
-// 宽屏下传给地图组件，用于计算浮动菜单/颜色图例的让位宽度；窄屏无浮层遮挡，传 0
 const PANEL_WIDTH_RATIO = 0.25
-// 中等宽度档的浮层占比（与样式 --panel-width: 28% 一致）
 const PANEL_WIDTH_RATIO_MEDIUM = 0.28
 
-/**
- * 首页总览容器
- * 唯一的数据请求入口：所有子组件只接收 props、抛出事件，不直接请求接口
- * 后期迁移：替换 api/homeOverview.js 与 config.js 即可
- */
 export default {
   name: 'HomeOverview',
   components: {
@@ -251,7 +224,6 @@ export default {
   },
   data() {
     return {
-      // 静态配置（模板中直接引用）
       CATEGORIES,
       CATEGORY_FIELD_MAP,
       RANK_TYPES,
@@ -260,82 +232,56 @@ export default {
       PIE_FIELD_MAP,
       MANAGE_COLORS,
       energyLabels: ENERGY_LABELS,
-      // 地图浮动菜单配置
       buildOptions: BUILD_FILTERS,
       subsidyOptions: SUBSIDY_FILTERS,
       subsidyIcons: station_type,
       fullscreenIcons: fullscreenIcon,
-      // 点位详情接口数据与加载态（点击点位 → /largeScreen/projectDetail）
       pointDetail: null,
       pointDetailLoading: false,
-      // 请求序号：用于丢弃过期响应（详见 methods.nextSeq）
+      // 丢弃过期响应
       reqSeq: 0,
 
-      // 地图筛选状态（子组件 .sync 回写）
-      // 状态筛选（显示运营/显示在建）默认全选：初始勾选态与原型一致；
-      // 全选与"未选"等价（均展示全量，接口 status=3），全部取消 = 展示全量（原型注5）
+      // 全选/未选等价（status=3），全部取消=全量
       buildFilter: ['运营', '在建'],
       subsidyFilter: SUBSIDY_FILTERS.slice(),
       priceType: 'wind',
-      // 行业「全不选」空态标记（原型注4：全部取消时页面数据清空，仅保留筛选器可操作）。
-      // 必须单独用标记而不是靠数组：query.categories 的空数组语义是「全部」（industry 传空取全量），
-      // 「全选」与「全不选」无法用同一个空数组区分
+      // 空数组=全部，单独标记区分「全不选」
       categoryNone: false,
 
       query: Object.assign({}, DEFAULT_QUERY),
-      // 层级 Tab 数据
       levels: [Object.assign({}, ROOT_LEVEL)],
 
       overview: {},
-      // 行业 tabs 计数快照（来自 queryProjectOverview.industryNum）：
-      // 分类全部取消、页面数据清空时仍保留，保证筛选器可操作
       categoryStats: [],
       rankList: [],
-      // 建设/运营管理项目报表原始数据（逐月数组，经 manageTrend 计算属性映射为图表结构）
       manageList: [],
-      // 运营项目情况的能源类型（风电/地面光伏，卡片右上角按钮切换，独立状态不与上报表联动）
       operateEnergyType: 'wind',
-      // 运营项目情况原始数据（queryOperateDetail 返回，指标与图表一体）
       operateDetail: {},
       activeLayers: [],
-      // 地图展示原始数据（mapDisplay 返回：全国=省份数组，省份=单对象；归一化存为省份数组）
       provinceGroups: [],
-      // 地图电价数据（mapDisplay/price 返回）：[{ name: 省名/地市名, _short: 地图区域名, fields: 电价字段 }]
-      // 只提供电价（着色/热力/浮层），点位与项目数仍来自 provinceGroups
       priceGroups: [],
-      // 地图点位分类（补贴属性两分类：无补贴/已补贴，由 projectColor 判定）
       pointCategories: POINT_CATEGORIES,
-      // 省会标记点 + 图标
       capitals: PROVINCE_CAPITALS,
       capitalIcon: provinceIcon,
-      // 页面主体宽度（动态检测，驱动宽屏/窄屏布局切换）
-      // 初值取窗口宽度做兜底，避免小屏首帧先按宽屏渲染再跳变；mounted 后以真实容器宽度为准
       pageWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
-      // 视口尺寸（CSS 像素）：大屏缩放系数按它算，不能用页面主体宽度 ——
-      // 主体宽度是 zoom 之后回流出来的值，用它会自激
+      // 视口尺寸用于缩放系数，不能用 zoom 后的主体宽度
       viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
       viewportHeight: typeof window !== 'undefined' ? window.innerHeight : 0
     }
   },
   computed: {
-    // 整页缩放系数：min(视口宽/1920, 视口高/1080)，1~2 倍。
-    // 超过 1080P 的屏（2K/带鱼屏/4K）整体等比放大，版式、图表、字号与 1080P 完全同比例；
-    // 1080P 及以上但不足 1 倍时保持 1（小屏继续走现有的多档样式）
     uiScale() {
       return calcUiScale(this.viewportWidth, this.viewportHeight)
     },
-    // 布局档位：narrow（纵向堆叠）/ medium（三栏 + 浮层 28%）/ wide（三栏 + 浮层 25%）
     layoutMode() {
       if (!this.pageWidth) return 'wide'
       if (this.pageWidth < NARROW_LAYOUT_WIDTH) return 'narrow'
       if (this.pageWidth < MEDIUM_LAYOUT_WIDTH) return 'medium'
       return 'wide'
     },
-    // 窄屏：页面主体宽度不足，切换为纵向排布
     isNarrow() {
       return this.layoutMode === 'narrow'
     },
-    // 地图浮动菜单的让位比例：宽屏让开左右浮层，窄屏地图通栏无需让位
     mapSideRatio() {
       if (this.isNarrow) return 0
       return this.layoutMode === 'medium' ? PANEL_WIDTH_RATIO_MEDIUM : PANEL_WIDTH_RATIO
@@ -373,7 +319,6 @@ export default {
       if (this.query.level !== 'province') return ''
       const hit = PROVINCE_LIST.find(p => p.code === this.query.provinceCode)
       if (hit) return hit.full
-      // 兜底：code 缺失时按层级名称反查
       const name = (this.levels[this.levels.length - 1] || {}).name || ''
       const legacy = findProvince(name)
       return legacy ? legacy.full : name
@@ -393,9 +338,7 @@ export default {
       }
     },
     // 全局报表请求参数（单一来源，所有报表接口共用）
-    // industry: 行业类型数组（多选），元素为行业名（风电/地面光伏）。
     // 「全部」= 展开后的全部行业名；「全不选」= 空数组（接口据此返回空结果集）
-    // startMonth / endMonth: 查询月份区间，yyyy-MM
     // provinceName: 省份（下钻省份的接口全称）或拆分区域名，空=全国
     // status: 项目状态 1在建; 2运营; 3在建和运营; 4未选择
     reportParams() {
@@ -405,7 +348,6 @@ export default {
         status: this.statusParam
       })
     },
-    // 月份区间选择器禁用项：开始/结束月份都不允许早于 MIN_MONTH（2024-01）
     monthPickerOptions() {
       const [y, m] = (MIN_MONTH || '2024-01').split('-').map(Number)
       const min = new Date(y, m - 1, 1).getTime()
@@ -422,13 +364,11 @@ export default {
         rankingType: this.query.rankType
       })
     },
-    // 「全部」展开后的行业名数组（也用于行业 tabs 的计数请求，见 fetchIndustryStats）
     allIndustryNames() {
       return CATEGORIES.map(c => c.name)
     },
     // 多选行业 → 接口 industry 参数：始终传数组，不做字符串序列化。
     // 全不选 → []（空数组，接口按「无行业」返回，页面随之为空）；
-    // 全部 → 全部行业名；选中若干行业 → 对应行业名
     industryParam() {
       if (this.categoryNone) return []
       const sel = this.query.categories || []
@@ -438,14 +378,10 @@ export default {
         return cat ? cat.name : id
       })
     },
-    // 电价维度默认值：菜单首项（风电结算电价）。
-    // 电价菜单与行业筛选无关，任何行业组合下都常驻可选
     defaultPriceType() {
       return PRICE_OPTIONS[0].id
     },
-    // 运营项目情况的类型可选项：风电/地面光伏 始终全部可选，与行业筛选无关。
     // 行业只影响接口入参 industry；某个类型在当前行业下没有项目时，
-    // 该页签自己的数据为空即可，不再靠隐藏页签来表达
     energyTypeOptions() {
       return ENERGY_TYPE_KEYS.map(key => ({ key, label: this.energyLabels[key] }))
     },
@@ -461,8 +397,6 @@ export default {
       const names = this.levels.map(l => l.name).slice(1)
       return names.length ? names.join(' / ') : '全国'
     },
-    // 行业 tabs：由 industryNum 派生，行业名反查 id 供筛选回写
-    // 计数取独立快照 categoryStats：分类全部取消（数据清空）时 tabs 仍可展示与操作
     categoryTabs() {
       const list = this.categoryStats || []
       return list.map(item => {
@@ -487,13 +421,11 @@ export default {
       return (this.overview.industryNum || []).filter(item => item.industry !== INDUSTRY_ALL)
     },
     // 运营项目情况指标：按能源类型取对应指标项，字段取自 queryOperateDetail 返回，图标按 label 容错匹配
-    // 电价属金额（配置里带 amount 标记）：整数部分加千分位展示
     summaryMetrics() {
       const conf = OPERATE_METRICS[this.operateEnergyType] || OPERATE_METRICS.wind
       const icons = SUMMARY_ICONS_MAP[this.operateEnergyType] || SUMMARY_ICONS_MAP.wind
       return conf.map(m => {
         const label = String(m.label || '').trim()
-        // 精确匹配 → 去空白匹配 → 包含匹配（容忍图标 key 带前后缀）
         const key = Object.keys(icons).find(
           k => k === label || k.trim() === label || label.includes(k) || k.includes(label)
         )
@@ -520,7 +452,6 @@ export default {
           data: list.map(item => {
             const value = Number(item[f.field]) || 0
             // 达标率口径兼容：接口可能返回比率（0.85）也可能返回百分数（85），
-            // 统一换算成百分数，轴名「达标率(%)」与刻度 40%/60% 才成立
             return f.field === 'yield' && value > 0 && value <= 1
               ? Math.round(value * 1000) / 10
               : value
@@ -528,11 +459,9 @@ export default {
         }))
       }
     },
-    // 图表双 Y 轴名称由组件按刻度自适应，当前不显示额外轴名
     operateChartYAxis() {
       return []
     },
-    // 饼图配色按行业名匹配，与数据顺序解耦
     pieColors() {
       return this.pieData.map(item => {
         const cat = CATEGORIES.find(c => c.name === item.industry)
@@ -567,7 +496,6 @@ export default {
     layerOptions() {
       return CATEGORIES.map(c => ({ key: c.id, label: c.name, color: c.color }))
     },
-    // 地图点位：provinceGroups.projectList 平铺归一化
     // 分类以接口 projectColor 为准：蓝色=无补贴、绿色=已补贴，只保留两类
     points() {
       const list = []
@@ -581,11 +509,9 @@ export default {
             lng: toCoordNumber(item.longitude),
             lat: toCoordNumber(item.latitude),
             category: cat.id,
-            // 补贴类型名与 station_type 图标 key 一致（无补贴/已补贴）
             categoryName: cat.name,
             subsidy: cat.name,
             // 项目状态：真实接口的 projectList 不返回该字段（状态由请求入参 status 在服务端过滤），
-            // 这里不做「在建」兜底——兜底会让所有点在只勾选「显示运营」时被前端二次过滤掉
             status: item.status || ''
           }))
         })
@@ -604,7 +530,6 @@ export default {
       })
       return map
     },
-    // 地图着色数据：按左下角选中的电价维度取聚合值
     // 全国视图 → 各省汇总值；省份下钻 → 该省各市区值（按市区粒度着色，visualMap 随之展示）
     // 取值兼容：字段候选列表（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.4155"）；
     // 电价取值兼容：字段候选（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.3655"）；
@@ -616,7 +541,6 @@ export default {
       const toDatum = (name, obj) => {
         const raw = pickPriceValue(obj, option.fields)
         const num = raw === null ? NaN : Number(raw)
-        // 真实结算电价可能是小数值（0.0001~0.3655），0 也是有效结算价：
         // 只要可解析且 >= 0 就入色阶（visualMap min/max 按数据自适应拉开对比）；
         // 仅字段缺失（null/空/不可解析）视为无数据保持白色
         if (!name || isNaN(num) || num < 0) return null
@@ -647,7 +571,6 @@ export default {
         })
         .filter(d => d && d.name)
     },
-    // 全国层级生效的数据分组：后端同时返回「内蒙古/河北」和「蒙西/蒙东/冀北/河北南网」时，
     // 用区域分组替换整省分组，避免同一块区域出现两个数据源（区域优先）
     countryGroups() {
       const groups = this.provinceGroups || []
@@ -664,7 +587,6 @@ export default {
     },
 
     // 省级下钻的地市条目：把两种返回形态统一成 [{ name: 地市名, ...电价字段, projectList }]
-    //   1. 单个省分组 + cityPriceList（本地 mock / 早期后端：地市明细单独放在 cityPriceList）
     //   2. 与全国同构的「地市 → 数据」映射（现网后端：归一化后每个地市一个分组，key 即地市名）
     // 区域下钻（蒙西/蒙东、冀北/河北南网）时只保留属于该区域的地市：
     // 后端已按区域返回时该过滤不改变结果，按省返回时由前端过滤掉其它区域
@@ -697,16 +619,13 @@ export default {
       if (hit) return hit.name
       return provinceShortName((this.levels[this.levels.length - 1] || {}).name || '')
     },
-    // 地图点位：只按右上角状态筛选 + 右下角补贴属性筛选（均为多选）
     // 不做任何省份/地市归属校验：接口返回的 projectList 全部直接打点。
     // 归属判断依赖后端入参（provinceName 传省名/区域名、status 传运营/在建），
     // 前端再按省份名比对只会误删（拆分区域的 provinceName 是区域名，与省名对不上）
     visiblePoints() {
-      // 行业「全不选」：地图照常取数（省份热力/电价着色正常），但不标记任何项目点位；
       // 下钻到省份同样不标点（同一份 points 派生）
       if (this.categoryNone) return []
       return this.points.filter(p => {
-        // 状态筛选：点位未带状态时一律展示。
         // 状态维度已由请求入参 status（由 buildFilter 推导）在服务端过滤，
         // 前端再按缺失字段判断会把整批点位误删（曾表现为「有 projectList 但地图无点」）
         const statusOk = !p.status ||
@@ -768,9 +687,7 @@ export default {
       const region = findRegion(this.query.regionName)
       return region ? region.cities : []
     },
-    // 电价菜单（左下角）：全国视图提供全部维度（含标杆电价）；
     // 下钻到省后无市区级标杆数据，菜单去掉标杆电价。
-    // 与行业筛选无关：不选任何发电行业时菜单同样常驻，只是地图可能着不到色
     priceOptions() {
       return this.query.level === 'country'
         ? PRICE_OPTIONS
@@ -782,7 +699,6 @@ export default {
     reportKey() {
       this.fetchAll()
     },
-    // 排名维度切换 → 只刷新排名，其它报表无需重取
     'query.rankType'() {
       // 层级切换引起的枚举校正不单独发请求（fetchAll 已统一刷新），
       // 否则 fetchRank 的序号晚于同批，会把地图等响应误判为过期丢弃
@@ -792,7 +708,6 @@ export default {
       }
       this.fetchRank()
     },
-    // 运营项目情况能源类型切换（风电/地面光伏）：只重新请求运营项目情况，不影响其它报表
     operateEnergyType() {
       this.fetchOperateDetail()
     },
@@ -810,7 +725,6 @@ export default {
   },
   mounted() {
     this.measurePageWidth()
-    // 窗口缩放 / 侧边栏展开收起：重新测量
     window.addEventListener('resize', this.measurePageWidth)
     // 容器宽度变化（侧边栏折叠动画、split 拖拽等 window resize 覆盖不到的场景）
     if (typeof ResizeObserver !== 'undefined' && this.$el) {
@@ -826,12 +740,10 @@ export default {
     }
   },
   methods: {
-    // 动态检测页面宽度：写入 pageWidth 驱动布局切换
     // 只在数值变化时赋值，避免 ResizeObserver 回调反复写同一值
     measurePageWidth() {
       const width = this.$el ? this.$el.clientWidth : 0
       if (width && width !== this.pageWidth) this.pageWidth = width
-      // 视口尺寸（未缩放）：驱动 uiScale
       if (window.innerWidth !== this.viewportWidth) this.viewportWidth = window.innerWidth
       if (window.innerHeight !== this.viewportHeight) this.viewportHeight = window.innerHeight
     },
@@ -845,8 +757,6 @@ export default {
         return defaultValue
       }
     },
-    // 请求序号：每次发起请求自增，写回数据前校验序号，丢弃已过期（被更新请求取代）的响应。
-    // 场景：快速切换月份/行业时，先发的慢响应若后到会覆盖新数据，表现为"刷新了但报表还是旧的"
     nextSeq() {
       this.reqSeq += 1
       return this.reqSeq
@@ -854,11 +764,6 @@ export default {
     isStale(seq) {
       return seq !== this.reqSeq
     },
-    // 项目总览报表：POST queryProjectOverview，入参 = 全局报表参数
-    // 项目总览：POST queryProjectOverview，入参 = 全局报表参数（含选中的行业）
-    // 指标（建设项目/运营期项目）按选中行业过滤；行业分布由 fetchIndustryStats 单独取全量
-    // 行业「全不选」空态：清空各报表数据（原型注4：数据清空，仅保留筛选器可操作）。
-    // categoryStats（行业 tabs 计数）不清 —— 它是独立快照，清空后筛选器仍需可点
     clearReportData() {
       this.overview = {}
       this.manageList = []
@@ -870,13 +775,11 @@ export default {
     async fetchOverview(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
       if (this.isStale(seq)) return
-      // 空态不写回：industry=[] 在后端语义里是「全部」（会返回全量数据），
       // 全不选时报表必须保持无值，所以照常发请求但不采用其响应
       if (this.categoryNone) return
       this.overview = data || {}
     },
     // 行业分布（顶部 tabs 计数 + 项目总览饼图）：同一接口但不传行业，
-    // 保证切换行业时始终显示全部行业的分布，不被所选行业过滤
     async fetchIndustryStats(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview({
         ...this.reportParams,
@@ -885,12 +788,10 @@ export default {
         industry: this.allIndustryNames
       }), {})
       if (this.isStale(seq)) return
-      // 行业 tabs 计数独立保存：分类全部取消选中时页面数据为空，但筛选器需保留供重新选择
       if (data && Array.isArray(data.industryNum) && data.industryNum.length) {
         this.categoryStats = data.industryNum
       }
     },
-    // 建设/运营管理项目报表：POST queryBuildandOperate，入参 = 全局报表参数
     async fetchManageTrend(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryBuildandOperate(this.reportParams), [])
       if (this.isStale(seq)) return
@@ -922,7 +823,6 @@ export default {
       })
     },
     // 运营指标取值：field 可能是字段名或候选字段数组，按顺序取第一个「有值」的
-    // （后端同一语义命名不统一：利用小时数风电为 usehour、光伏为 useHour；结算电价为 electrovalence；
     //  null / undefined / 空串视为无值，0 是有效值需要保留）
     pickOperateValue(field) {
       const keys = Array.isArray(field) ? field : [field]
@@ -932,7 +832,6 @@ export default {
       }
       return null
     },
-    // 运营项目情况：POST queryOperateDetail，入参 = 全局报表参数 + operateType（随风电/地面光伏切换联动）
     async fetchOperateDetail(seq = this.nextSeq()) {
       const params = Object.assign({}, this.reportParams, {
         operateType: OPERATE_TYPE_MAP[this.operateEnergyType] || '1'
@@ -943,10 +842,8 @@ export default {
       this.operateDetail = data || {}
     },
 
-    // 全量刷新：一次取数共用同一序号，任一更晚的请求都会让这批结果作废，保证界面与最后一次操作一致
     async fetchAll() {
       const seq = this.nextSeq()
-      // 前 5 个请求各自写回自己的 data，这里只做并发编排，不依赖返回值
       // 行业「全不选」同样走这条链路：industry 传空数组，由接口返回空结果集
       await Promise.all([
         this.fetchOverview(seq),
@@ -959,19 +856,15 @@ export default {
         this.fetchMapPrice(seq)
       ])
     },
-    // 地图展示：POST queryMapDisplay，入参 = 全局报表参数
     // 返回结构兼容三种形态，统一归一化为省份数组 provinceGroups：
-    //   1. 数组 [{ provinceName, projectList, ... }]
     //   2. 单对象（省份下钻：{ projectList, cityPriceList, ... }）
     //   3. 省名 → 数据的对象映射（真实接口形态：{ 上海市: {...}, 天津市: {...} }）
-    // 行业「全不选」照常写回：省份热力 / 电价着色要正常显示，
     // 只是点位不标（由 visiblePoints 早退回空数组控制）
     async fetchMapDisplay(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryMapDisplay(this.reportParams), [])
       if (this.isStale(seq)) return
       this.provinceGroups = this.normalizeProvinceGroups(data)
     },
-    // 地图电价：POST queryMapPrice，入参 = 全局报表参数（与 mapDisplay 完全一致）
     // 全国 → 「省名/业务区域名 → 电价」，下钻 → 「地市名 → 电价」，只用于电价着色（热力）与悬浮浮层
     // 接口整体失败时保持空数组：此时各分组沿用 mapDisplay 自带的电价字段，地图不失去着色
     async fetchMapPrice(seq = this.nextSeq()) {
@@ -979,7 +872,6 @@ export default {
       if (this.isStale(seq)) return
       this.priceGroups = this.normalizePriceGroups(data)
     },
-    // 电价返回归一化：{ 省名: 电价 } / [{ name, ...电价 }] / 单条电价 → [{ name, _short, fields }]
     // _short 是地图上的区域名（省短名或业务区域名），与 resolveGroupName 的口径一致，用于二次索引
     normalizePriceGroups(data) {
       const list = []
@@ -991,7 +883,6 @@ export default {
         const short = provinceShortName(name)
         list.push({ name, _short: normalizeRegionName(short) || short, fields })
       }
-      // Swagger 里 Map 值可能被包成 { additionalProperties1: { 山东省: {...} } }，逐层剥开
       let payload = data
       for (let i = 0; i < 3; i += 1) {
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) break
@@ -1029,7 +920,6 @@ export default {
         if (looksLikeSingleGroup) return [data]
         // key 映射：全国是全国→省/区域，省级下钻是地市→数据（返回结构与全国完全一致）。
         // key 即分组名，必须覆盖内层字段 —— 内层的 provinceName 可能写的是省全称/长地名，
-        // 直接用它会把「玉溪市」这类地市分组统统认成「云南省」，地市着色与浮层就都挂不上
         return Object.keys(data).map(key => Object.assign({}, data[key], {
           provinceName: key,
           _groupKey: key
@@ -1038,42 +928,32 @@ export default {
       return []
     },
     // 行业多选变更：选中全部真实分类时规范化为空数组（= 全部，industry 传空）；
-    // 空列表 = 全部取消（空态 none=true：报表数据清空，仅保留筛选器）
     handleCategoryChange(next) {
       const list = Array.isArray(next) ? next : []
       const realIds = (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
       const isAll = realIds.length > 0 && realIds.every(id => list.includes(id))
       this.setCategories(isAll ? [] : list, !list.length)
     },
-    // 行业选中态统一写入口：只写行业筛选这一个维度。
-    // 运营类型（风电/地面光伏）、排名维度、电价维度都不跟行业联动，
-    // 各自保留用户的当前选择，由本批 fetchAll 带上新 industry 统一取数。
     // none：是否为「全不选」空态 —— query.categories 为空数组时既可能是全选
     // （industry 传空取全量）也可能是全不选，二者必须靠该参数区分
     setCategories(list, none = false) {
       this.categoryNone = none
       this.query.categories = list
       // 进入「全不选」立即清空报表，不等接口返回（industry=[] 会被后端当「全部」，
-      // 其响应不采用，见各 fetch* 里的 categoryNone 守卫）
       if (none) this.clearReportData()
     },
-    // 某层级下的排名维度候选：只由层级决定（全国 4 项 / 省内 3 项），与行业筛选无关。
     // 行业只影响接口入参 industry；某维度在当前行业下没有数据时，该列显示空即可
     rankOptionsFor(level) {
       return level === 'country' ? RANK_TYPES : REGION_RANK_TYPES
     },
-    // 运营项目情况卡片右上角能源类型切换（风电/地面光伏）
-    // 类型最少选中一个：点击当前项不取消，不在可选项内的类型忽略
     handleEnergyChange(type) {
       if (type === this.operateEnergyType) return
       if (!this.energyTypeOptions.some(item => item.key === type)) return
       this.operateEnergyType = type
     },
-    // 排名维度 tabs 手动切换：只刷新排名，其它报表无需重取
     handleRankTypeChange(value) {
       this.query.rankType = value
     },
-    // 排名维度程序化写入（层级切换时重置）：由本批 fetchAll 统一取数，抑制单独请求
     // 仅值真正变化时才置标记，否则 watch 不触发、标记残留会吞掉下一次正常切换
     setRankType(value) {
       if (value === this.query.rankType) return
@@ -1112,9 +992,7 @@ export default {
       this.query.provinceCode = code
       // 地图点位来自 provinceGroups：省份 GeoJSON 会先于接口数据落地，
       // 下钻瞬间若不清空，全国的点会被画到省地图上（错位、跳一下再回来）。
-      // 先清空，等本批 queryMapDisplay 返回后一次性渲染，全过程无动画
       this.provinceGroups = []
-      // 电价同理：全国是按省名的电价，先清掉，避免省内地市短暂挂上「同名省份」的电价
       this.priceGroups = []
       // 区域下钻：记录业务区域，驱动地图只画该区域地市、接口按区域取数
       this.query.regionName = region || ''
@@ -1123,7 +1001,6 @@ export default {
       this.levels = [Object.assign({}, ROOT_LEVEL), { code, name }]
       if (region) this.levels.push({ code: `${code}|${region}`, name: region })
       // 下钻到省：电价维度复位到菜单首项（风电结算电价），与「返回全国」保持一致的默认态。
-      // 省内菜单不含标杆电价，沿用旧选择会出现「菜单项消失但地图仍按标杆电价着色」；
       // 省内切区域（蒙西↔蒙东等）不算重新下钻，保留用户当前选择
       if (fromCountry) {
         this.priceType = this.defaultPriceType
@@ -1185,14 +1062,10 @@ export default {
         const allNum = nums.every(n => !isNaN(n))
         merged[key] = allNum ? nums.reduce((a, b) => a + b, 0) / nums.length : vals[0]
       })
-      // 项目数按求和（不是平均）
       merged.projectCount = items.reduce((sum, i) => sum + (Number(i.projectCount) || 0), 0)
       return merged
     },
-    // 地图「返回」：回到全国视图
     handleMapBack() {
-      // 返回全国：排名维度重置为全国首项，在 level 变化前写入，
-      // 保证本批请求携带正确的 rankingType
       this.setRankType(this.rankOptionsFor('country')[0].value)
       this.query.level = 'country'
       this.query.provinceCode = ''
@@ -1203,7 +1076,6 @@ export default {
       this.provinceGroups = []
       // 电价同理：省内是地市粒度的电价，全国图按省名取，先清掉等本批接口返回
       this.priceGroups = []
-      // 返回全国：电价维度同样复位到菜单首项（风电结算电价），不沿用省内选择
       this.priceType = this.defaultPriceType
     },
     // 点位点击：详情卡片由地图组件弹出，此处请求项目详情接口并回传给卡片
@@ -1224,9 +1096,6 @@ export default {
       this.pointDetail = detail
       this.pointDetailLoading = false
     },
-    // 卡片「更多>>」：跳转打开该项目对应的详情页面（原型交互13）
-    // 发电项目（POWER）跳运营侧项目清单，非标项目跳项目侧清单；
-    // projectCode / id 取对应详情对象（powerGenerationDetail / nonStandardDetail）
     handlePointMore({ detail }) {
       const data = detail.powerGenerationDetail
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
@@ -1243,7 +1112,6 @@ export default {
         )
       }
     },
-    // 卡片「详情>>」：跳转运营填报列表页（原型交互17）
     handlePointDetail({ detail }) {
       const data = detail.powerGenerationDetail
       // 详情接口未返回 id 时不拼该参数，避免拼出 id=undefined 的死链
@@ -1288,7 +1156,6 @@ export default {
   background-color: transparent !important;
   color: #fff;
 }
-/* clearable=false 时 element-ui 仍会渲染清空图标，hover / 展开时可能占位，直接隐藏 */
 .home-overview__toolbar-right ::v-deep .month-range-picker .el-range__close-icon {
   display: none !important;
 }
@@ -1310,25 +1177,15 @@ export default {
   box-sizing: border-box;
   overflow: hidden;
 
-  /* 左右浮层尺寸基准：宽度各占页面主体 25%，与工具条/浮层间距共用 12px。
-     工具条的左右内缩、浮层宽度、地图内浮动菜单的让位都取自这里，改一处即可联动 */
   --panel-width: 25%;
   --panel-gutter: 12px;
-  /* 地图内浮动菜单的左右让位：要同时让开「浮层外边距 + 浮层宽度 + 浮层与地图的间距」，
-     即 25% + 12px × 2，随页面宽度百分比缩放 */
   --map-side-inset: calc(var(--panel-width) + var(--panel-gutter) * 2);
-  /* 右上角状态筛选的顶部位置：宽屏落在工具条（月份选择器）下方 */
   --map-panel-top: 60px;
 
-  /* 中等宽度（1024~1440）：浮层从 25% 加宽到 28%。
-     这类窗口下 25% 只有 270px 左右，「运营项目情况」标题会和右上角操作按钮挤在一起，
-     指标也会被省略号吃掉；加宽到 28% 后卡片仍有 ~300px，地图与工具条仍留出可视宽度。
-     工具条/地图让位全部由 --panel-width 派生，这里改一处即可联动 */
   &--medium {
     --panel-width: 28%;
   }
 
-  /* 窄面板兜底：卡片标题与右上角操作区放不下时整体换行，不再互相压字 */
   ::v-deep .panel-card__header {
     flex-wrap: wrap;
     height: auto;
@@ -1336,7 +1193,6 @@ export default {
     row-gap: 2px;
   }
 
-  /* 全屏作用于本页根节点（非地图容器）：铺满视口，左右面板与工具栏等功能保持可见 */
   &:fullscreen {
     /* 全屏时高度同样按缩放系数折算，否则 zoom 会把全屏内容放大到超出屏幕 */
     height: calc(100vh / var(--ui-scale, 1));
@@ -1349,7 +1205,6 @@ export default {
     min-height: 0;
   }
 
-  /* 地图铺满底层 */
   &__map {
     position: absolute;
     top: 0;
@@ -1358,11 +1213,9 @@ export default {
     bottom: 0;
   }
 
-  /* 顶部悬浮工具条：位于左右浮层之间，左右两列布局 */
   &__toolbar {
     position: absolute;
     top: var(--panel-gutter);
-    /* 让开左右浮层：浮层外边距 + 浮层宽度（25%）+ 间距，跟随浮层宽度自适应 */
     left: calc(var(--panel-width) + var(--panel-gutter) * 2);
     right: calc(var(--panel-width) + var(--panel-gutter) * 2);
     z-index: 11;
@@ -1377,13 +1230,11 @@ export default {
       pointer-events: auto;
     }
 
-    /* 左列：行业 tabs，宽度不够时在列内换行，不挤压右侧控件 */
     &-left {
       flex: 1;
       min-width: 0;
     }
 
-    /* 右列：月份选择器，固定右上角不换行 */
     &-right {
       flex-shrink: 0;
       display: flex;
@@ -1391,7 +1242,6 @@ export default {
     }
   }
 
-  /* 左右统计面板浮在地图两侧：宽 25%，上下左右各让出 12px（大屏不与页面边缘相贴） */
   &__col {
     position: absolute;
     top: var(--panel-gutter);
@@ -1402,7 +1252,6 @@ export default {
     min-height: 0;
     overflow-y: auto;
 
-    /* 滚动条默认不出现，hover 时显示细滚动条 */
     &::-webkit-scrollbar {
       width: 4px;
     }
@@ -1423,7 +1272,6 @@ export default {
       background-color: rgba(255, 255, 255, 1);
       box-shadow: 0px 0px 16px 0px rgba(0, 0, 0, 0.05);
       font-family: Arial-regular;
-      /* 左栏：内容区滚动，底部备注固定不被遮挡 */
       overflow: hidden;
     }
 
@@ -1439,12 +1287,7 @@ export default {
         font-family: Arial-regular;
       }
 
-      /* 上卡（建设/运营管理项目报表）高度由「自身宽度」驱动：1080P 实测 428 × 314 ≈ 1.37:1。
-         只按列高百分比锁（旧的 32.3%）时，带鱼屏/超宽屏栏宽变大而列高不变，
-         卡片会被拉成 2:1 的扁条、柱线图挤成一条——改成宽高比后卡片随宽度同步长高。
-         max-height 46% 兜住极端宽高比，保证下卡（运营项目情况）仍有充足空间 */
       .panel-card:first-child {
-        /* 不支持 aspect-ratio 时的回落：按 1080P 的高度占比 */
         flex: 0 0 32.3%;
         min-height: 262px;
       }
@@ -1465,8 +1308,6 @@ export default {
     }
   }
 
-  /* 左栏内容区：项目总览 + 地区排名。两个卡片都能跟着列高收缩（见下方 flex 与 min-height），
-     正常情况下内容永远放得下，所以这里用 hidden 而不是 auto —— 左栏不允许出现滚动条 */
   &__left-scroll {
     flex: 1;
     min-height: 0;
@@ -1474,11 +1315,6 @@ export default {
     flex-direction: column;
     overflow: hidden;
 
-    /* 项目总览高度跟着「内容」自适应：卡片上半部（标题 + 两条指标）是固定量，
-       下半部环图区按 1080P 实测 404 × 169 ≈ 2.39:1 锁比例 —— 栏宽变大时环图区同步变高，
-       环图按宽度等比放大，卡片高度自然跟着长，不会有「卡片被拉高、环图不跟大」的空白。
-       只给卡片一个宽高比是错的：环图尺寸由宽度决定，卡片长高后底部会空一片。
-       flex-shrink: 1 —— 列高不足时卡片先让位给地区排名，避免顶出滚动条 */
     > .panel-card:first-child {
       flex: 0 1 auto;
       min-height: 240px;
@@ -1501,7 +1337,6 @@ export default {
       min-height: 110px;
     }
 
-    /* 滚动条默认不出现，hover 时显示细滚动条 */
     &::-webkit-scrollbar {
       width: 4px;
     }
@@ -1516,7 +1351,6 @@ export default {
     }
   }
 
-  /* 左栏底部备注：固定显示，不参与滚动、不被内容遮挡 */
   &__note {
     flex-shrink: 0;
     margin: 8px 8px 10px;
@@ -1534,7 +1368,6 @@ export default {
      取消左右悬浮浮层，主体改为纵向文档流，按「工具条 → 左栏 → 地图 → 右栏」排列，
      整页滚动；图表由各自的 ResizeObserver 跟随容器缩放，报表比例不被挤压变形 */
   &--narrow {
-    /* 窄屏地图通栏，浮动菜单只需常规间距，且顶部无工具条遮挡 */
     --map-side-inset: var(--panel-gutter);
     --map-panel-top: var(--panel-gutter);
 
@@ -1546,7 +1379,6 @@ export default {
       overflow-x: hidden;
     }
 
-    /* 工具条脱离绝对定位，排在最前 */
     .home-overview__toolbar {
       position: relative;
       top: auto;
@@ -1556,7 +1388,6 @@ export default {
       flex-shrink: 0;
     }
 
-    /* 左右浮层：回到文档流，宽度铺满、高度随内容，滚动交给页面主体 */
     .home-overview__col {
       position: relative;
       top: auto;
@@ -1577,19 +1408,15 @@ export default {
         order: 4;
       }
 
-      /* 浮层内部不再二次滚动，全部由页面主体滚动承载 */
       .home-overview__left-scroll {
         overflow: visible;
       }
 
-      /* 排名列表在整页流里按内容撑开，不继承浮动层的 100% 高度约束 */
       .rank-list {
         height: auto;
       }
     }
 
-    /* 地图脱离铺底，按中间层插入，并给出固定高度：
-       避免 flex 拉伸/压缩导致地图比例失真的同时保持可滚动 */
     .home-overview__map {
       position: relative;
       top: auto;
@@ -1605,14 +1432,12 @@ export default {
       overflow: hidden;
     }
 
-    /* 整页纵向排布后不需要额外占位高度，按内容自然撑开 */
     .summary-card {
       min-height: 0;
     }
   }
 }
 
-/* 项目情况卡片右上角能源类型切换（el-button-group 分段样式） */
 .energy-switch-group {
   display: inline-flex;
 
@@ -1628,13 +1453,10 @@ export default {
   }
 }
 
-/* 运营项目情况：指标列表 + 图表纵向布局，图表自适应占满剩余高度 */
 .summary-card {
   ::v-deep .panel-card__body {
     display: flex;
     flex-direction: column;
-    /* 矮屏（1080P 及以下）指标 + 图表超出卡片高度时在本模块内滚动，
-       不再被 panel-card 的 overflow: hidden 裁切掉图表 */
     overflow-x: hidden;
     overflow-y: auto;
 
@@ -1661,9 +1483,6 @@ export default {
 
   .hours-chart {
     flex: 1 1 auto;
-    /* 高度自适应：吃满卡片剩余空间，指标区换行多吃高度时先压图表。
-       下限 150px（原型注2「下面表格高度压缩，最小值 150px」），
-       压到 150 仍放不下才由上面的 overflow-y: auto 出滚动条 */
     min-height: 150px;
     margin-top: 8px;
   }
@@ -1672,7 +1491,6 @@ export default {
 .panel-block {
   flex-shrink: 0;
 
-  /* 自适应占满剩余高度，内容超出时由内部滚动 */
   &--flex {
     flex: 1;
     min-height: 0;
@@ -1680,14 +1498,11 @@ export default {
     flex-direction: column;
   }
 
-  /* 列表换行撑高后，下方图表被压缩时的最小高度（与 .summary-card .hours-chart 保持一致） */
   .chart-bar-line {
     min-height: 150px;
   }
 }
 
-/* 项目总览环图空态（行业全不选时无数据）：与排名列表的空态文案保持一致，
-   高度跟环图一致（撑满卡片剩余高度），避免面板高度跳动 */
 .pie-empty {
   flex: 1;
   min-height: 0;
@@ -1698,17 +1513,8 @@ export default {
   font-size: 13px;
 }
 
-/* ==================== 矮视口（1080P 带浏览器界面）压缩 ====================
-   整页按 1920×1080 设计稿缩放，但 uiScale 最小为 1（小视口不缩），
-   1080P 屏被菜单栏/地址栏/书签栏占掉高度后（视口高 ~780~880），
-   逻辑可用高度只剩 800 上下，右「运营项目情况」的指标卡（数据长时折成 4 行，192px）
-   加图表 150px 会超出卡片。这里压缩行高与内边距把高度让给图表，
-   尽量让它在 150px 下限内放得下；实在放不下时由卡片自身的 overflow-y: auto 滚动兜底。
-   左「项目总览」不在这里处理：环图区与卡片都能随列高收缩，且列内容区是 hidden，
-   任何高度下都不会出现滚动条。无浏览器界面时不会命中 */
 @media (max-height: 900px) {
   .summary-card {
-    /* 指标卡：行高 40 → 34、外边距 4 → 3、内边距 8 → 5/8，4 行合计省约 44px */
     ::v-deep .metric-list.is-card .metric-item {
       height: 34px;
       margin: 3px;
@@ -1723,7 +1529,6 @@ export default {
       font-size: 17px;
     }
 
-    /* 卡片内边距 12 → 10：再给图表下限腾 4px */
     ::v-deep .panel-card__body {
       padding: 10px 12px;
     }
