@@ -406,7 +406,6 @@ export default {
           apiPaths: this.toFormApiPaths(detail.apiPaths),
           regular: Number(detail.regular) === 0 ? 0 : 1
         })
-        this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
         return
       }
 
