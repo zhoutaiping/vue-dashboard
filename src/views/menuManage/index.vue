@@ -1,6 +1,5 @@
 <template>
   <div class="menu-manage">
-    <!-- 工具栏：搜索 / 新增 / 全部展开收起 / 数据修复 -->
     <div class="menu-manage__toolbar">
       <div class="menu-manage__toolbar-left">
         <el-input
@@ -15,7 +14,6 @@
         <el-button size="small" class="menu-manage__ghost-btn" @click="toggleExpandAll">
           {{ expandAll ? '全部收起' : '全部展开' }}
         </el-button>
-        <!-- 一次性数据修复：仅点击按钮才触发，进入页面不执行 -->
         <el-button
           size="small"
           class="menu-manage__ghost-btn"
@@ -28,9 +26,6 @@
       <span class="menu-manage__count">共 {{ totalCount }} 项</span>
     </div>
 
-    <!-- 树形菜单表格：row-key=id + tree-props children 构成层级，展开箭头在第一列
-         刻意不用 fixed 列：element-ui 每多一个固定列就会额外渲染一份完整行 DOM，
-         Vue2 + webpack3 老项目在大表格上会慢数倍 -->
     <el-table
       ref="table"
       v-loading="loading"
@@ -64,7 +59,6 @@
         </template>
       </el-table-column>
 
-      <!-- 原生 title 代替 show-overflow-tooltip：大表格少渲染上千个 ElTooltip 组件 -->
       <el-table-column prop="code" label="权限编码" min-width="150">
         <template slot-scope="{ row }">
           <span class="cell-ellipsis" :title="row.code">{{ row.code }}</span>
@@ -80,6 +74,18 @@
       <el-table-column label="菜单类型" width="90" align="center">
         <template slot-scope="{ row }">
           <el-tag size="mini" effect="plain" :type="meantypeTag(row)">{{ meantypeText(row) }}</el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="是否显示" width="90" align="center">
+        <template slot-scope="{ row }">
+          {{ sidebarShowText(row) }}
+        </template>
+      </el-table-column>
+
+      <el-table-column label="是否缓存" width="90" align="center">
+        <template slot-scope="{ row }">
+          {{ cacheFlagText(row) }}
         </template>
       </el-table-column>
 
@@ -121,7 +127,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- 新增 / 编辑抽屉：表单独立组件，保存成功后刷新列表 -->
     <menu-form-drawer
       :visible.sync="drawerVisible"
       :mode="drawerMode"
@@ -146,19 +151,14 @@ export default {
     return {
       loading: false,
       keyword: '',
-      // 接口原始树（不随搜索变化），排序/编辑/删除都以它为准
       rawList: [],
       totalCount: 0,
-      // 全部展开状态（配合 applyExpandAll 批量同步）
       expandAll: false,
-      // 父级总数 / 已展开数：expand-change 用计数增量维护，避免每次都遍历整棵树
       parentCount: 0,
       expandedCount: 0,
-      // 批量操作期间屏蔽事件回写
       batchSyncing: false,
       tableHeight: 560,
       expandedOnce: false,
-      // 新增 / 编辑抽屉状态（表单逻辑在 MenuFormDrawer 组件内）
       drawerVisible: false,
       drawerMode: 'add', // add 新增顶级 / addChild 新增下级 / edit 编辑
       editingRow: null,
@@ -166,13 +166,11 @@ export default {
     }
   },
   computed: {
-    // 搜索过滤：命中节点保留全部子级，未命中但有命中子级的只保留命中的分支
     tableData() {
       return this.filterTree(this.rawList, this.keyword)
     }
   },
   watch: {
-    // 搜索时自动展开命中分支，并让按钮状态与实际展开保持一致；清空后按用户选择恢复
     keyword(val) {
       if (val) this.expandAll = true
       this.$nextTick(this.applyExpandAll)
@@ -189,9 +187,7 @@ export default {
     window.removeEventListener('resize', this.updateTableHeight)
   },
   methods: {
-    // 点击「修复编码」才触发：确认框区分「仅预演」与「执行修复」，关闭则什么都不做
     handleFixMenuCode() {
-      // 兜底：即便修复函数本身抛错（迁移后方法缺失 / this 丢失），也给出提示而不是静默
       const onError = e => this.$message.error(`修复失败：${(e && e.message) || '请求异常'}`)
       this.$confirm(
         '将遍历菜单树，把目录 / 页面菜单中 url 有值的节点：menuCode 改为原 url 值，url 改为 @/view + 原 url。已修复过的节点会自动跳过。',
@@ -205,22 +201,15 @@ export default {
       ).then(
         () => this.fixMenuCodeByUrl({ dryRun: false }),
         action => {
-          // 用 then 的第二个参数接收取消，把「取消」和「业务异常」分开；
-          // 否则 .catch 会把修复过程中的异常当成取消吞掉，表现就是点了没反应、接口一个都不发。
-          // distinguishCancelAndClose 下点 X 是 'close'，什么都不做。
           if (action === 'cancel') return this.fixMenuCodeByUrl({ dryRun: true })
         }
       ).catch(onError)
     },
-    /**
-     * 批量修复 menuCode / url：只处理目录与页面菜单中 url 有值且未修复过的节点
-     */
     async fixMenuCodeByUrl(options) {
       let result
       try {
         result = await runMenuCodeFix(options || {})
       } catch (e) {
-        // 迁移后接口不通 / 字段不兼容时给出明确提示，避免静默失败
         this.$message.error(`修复失败：${(e && e.message) || '请求异常'}`)
         return null
       }
@@ -230,7 +219,6 @@ export default {
       const summary = dryRun
         ? `遍历 ${result.total} 个节点，命中 ${result.matched} 条，未提交任何修改`
         : `遍历 ${result.total} 个节点，命中 ${result.matched} 条，已更新 ${result.updated} 条`
-      // 把第一条失败原因带出来：tree 成功码 / 数据结构不匹配时，能直接从提示定位
       const reason = result.failures.length
         ? `；失败 ${result.failures.length} 条，首个原因：${result.failures[0].msg}`
         : ''
@@ -242,36 +230,43 @@ export default {
       if (!dryRun && result.updated) this.fetchList()
       return result
     },
-    // 后端成功码：0（本项目约定）/ 200（历史接口）
     isOk(res) {
       return !!res && (res.code === 200 || res.code === 0)
     },
     iconExists(name) {
       return hasIcon(name)
     },
-    // 历史 iconfont 值：用近似的 Element 图标兜底展示
     legacyIconClass(name) {
       return legacyIcon(name)
     },
-    // 真实接口字段是 meantype（文档/报错文案误写成 menutype），这里兼容两种写法
     menutypeOf(row) {
       return (row && (row.meantype || row.menutype)) || 'menu'
     },
-    // meantype 只有 menu / button；menu 再按是否有子级区分目录与页面菜单
     meantypeText(row) {
       if (this.menutypeOf(row) === 'button') return '按钮'
       return (row.children || []).length && row.children.some(i => i.meantype === 'menu') ? '目录' : '菜单'
     },
     meantypeTag(row) {
       if (this.menutypeOf(row) === 'button') return 'warning'
-      return (row.children || []).length ? '' : 'success'
+      return ''
     },
-    // regular：0 锁定不可移动；接口可能返回 null / 缺省，此时视为可移动
+    flagText(row, field, zeroText, oneText) {
+      if (this.menutypeOf(row) === 'button') return '--'
+      const value = row[field]
+      if (value === 0 || value === '0') return zeroText
+      if (value === 1 || value === '1') return oneText
+      return '--'
+    },
+    sidebarShowText(row) {
+      return this.flagText(row, 'sidebarShow', '显示', '不显示')
+    },
+    cacheFlagText(row) {
+      return this.flagText(row, 'cacheFlag', '缓存', '不缓存')
+    },
     isLocked(row) {
       return row.regular === 0 || row.regular === '0'
     },
     updateTableHeight() {
-      // 视口 - 顶栏(50) - tags-view(34) - 页面内边距(32) - 工具栏(44) - 余量(12)
       this.tableHeight = Math.max(320, window.innerHeight - 172)
     },
     async fetchList() {
@@ -287,7 +282,6 @@ export default {
       this.rawList = Array.isArray(res.data) ? res.data : []
       this.totalCount = this.countTree(this.rawList)
       this.$nextTick(() => {
-        // 首次进入时 Layout 可能还在调整高度，渲染完成后再校正一次表格高度
         this.updateTableHeight()
         if (!this.expandedOnce) {
           this.expandedOnce = true
@@ -312,18 +306,15 @@ export default {
       })
       return result
     },
-    // 首屏展开第一个有子级的目录，避免整页全是折叠行
     expandFirstParent() {
       if (this.expandAll || this.keyword || !this.$refs.table) return
       const first = this.tableData.find(item => (item.children || []).length)
       if (first) this.$refs.table.toggleRowExpansion(first, true)
     },
-    // 兼容 row-key 为字符串或函数（老项目里两种都有）
     rowKeyValue(row, rowKey) {
       if (typeof rowKey === 'function') return rowKey(row)
       return row[rowKey || 'id']
     },
-    // 收集当前表格里的父级节点：只遍历一次，不用递归函数调用开销
     collectParents() {
       const parents = []
       const stack = (this.tableData || []).slice()
@@ -336,7 +327,6 @@ export default {
       }
       return parents
     },
-    // 数据刷新 / 搜索过滤后重算一次计数（整棵树只扫一次）
     refreshExpandState() {
       const table = this.$refs.table
       const treeData = (table && table.store && table.store.states && table.store.states.treeData) || {}
@@ -354,13 +344,6 @@ export default {
       this.expandedCount = expandedCount
       this.expandAll = parentCount > 0 && expandedCount === parentCount
     },
-    /**
-     * 批量展开 / 收起
-     * 不逐行调 toggleRowExpansion：那会每行触发一次渲染、一次 updateTableScrollY
-     * 和一次 expand-change，节点多时接近 O(N^2)，老项目上明显卡顿。
-     * element-ui 树表的展开态就是 store.states.treeData[key].expanded，
-     * 在同一个同步循环里批量赋值，Vue 只会合并成一次渲染。
-     */
     applyExpandAll() {
       const table = this.$refs.table
       if (!table) return
@@ -376,12 +359,10 @@ export default {
         const key = this.rowKeyValue(parents[i], states && states.rowKey)
         const node = treeData[key]
         if (node && 'expanded' in node) {
-          // 状态未变的节点不赋值，省掉无意义的响应式通知
           if (node.expanded !== expand) node.expanded = expand
           written += 1
         }
       }
-      // 老版本 element-ui 若没有 treeData.expanded，退回官方 API
       if (written !== parents.length && table.toggleRowExpansion) {
         for (let i = 0; i < parents.length; i += 1) {
           table.toggleRowExpansion(parents[i], expand)
@@ -393,7 +374,6 @@ export default {
       this.parentCount = parents.length
       this.expandedCount = expand ? parents.length : 0
     },
-    // 单行展开/收起：O(1) 增量维护，不扫整棵树
     syncExpandState(row, expanded) {
       if (this.batchSyncing) return
       if (typeof expanded !== 'boolean') {
@@ -406,7 +386,6 @@ export default {
       if (this.expandedCount > this.parentCount) this.expandedCount = this.parentCount
       this.expandAll = this.parentCount > 0 && this.expandedCount === this.parentCount
     },
-    // 表格重建 / 数据刷新后恢复展开态：双 nextTick 等新表格挂载完成
     restoreExpandState() {
       this.$nextTick(() => {
         this.$nextTick(() => {
@@ -419,7 +398,6 @@ export default {
       this.expandAll = !this.expandAll
       this.$nextTick(this.applyExpandAll)
     },
-    // 同级列表（排序按钮的禁用判断依赖它）
     siblingsOf(row) {
       const find = (list, pid) => {
         if (!Number(pid)) return list
@@ -436,7 +414,6 @@ export default {
     siblingIndex(row) {
       return this.siblingsOf(row).findIndex(item => item.id === row.id)
     },
-    // 首/尾或锁定（regular=0）都不可移动
     isFirstSibling(row) {
       return this.isLocked(row) || this.siblingIndex(row) <= 0
     },
@@ -458,7 +435,6 @@ export default {
         this.$message.warning('该菜单已锁定，不可移动')
         return
       }
-      // 接口约定 direction 为 UP / DOWN
       const res = await moveMenu({ id: row.id, direction: String(direction).toUpperCase() })
       if (!this.isOk(res)) {
         this.$message.error((res && res.msg) || '排序失败')
@@ -467,7 +443,6 @@ export default {
       this.$message.success('排序成功')
       this.fetchList()
     },
-    // 打开抽屉：表单细节（详情回填 / 自动编码 / 校验）都在 MenuFormDrawer 内处理
     handleAddTop() {
       this.drawerMode = 'add'
       this.editingRow = null
@@ -487,7 +462,6 @@ export default {
       this.drawerVisible = true
     },
     handleDelete(row) {
-      // 接口语义：删除节点时其全部子节点一并删除
       const childCount = this.countTree(row.children)
       const that = this
       const tip = childCount > 0 ? `，其下 ${childCount} 个子节点也将一并删除` : ''
@@ -513,8 +487,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-// 主题跟随系统（vue-element-admin 默认浅色：白底 + 主色 #0088ff），
-// 不再单独铺深蓝，保持与后台其它页面一致
 .menu-manage {
   box-sizing: border-box;
   min-height: calc(100vh - 84px);
@@ -537,7 +509,6 @@ export default {
     width: 280px;
   }
 
-  // 「全部展开/收起」：使用系统次要按钮样式，无需额外定制
   &__ghost-btn {
     margin-left: 0;
   }
@@ -548,25 +519,19 @@ export default {
   }
 }
 
-/* 树形缩进相关尺寸：Element 展开箭头 20px 宽 + 3px 右间距 */
 $menu-expand-width: 20px;
 $menu-expand-gap: 3px;
 
-/* 名称列单元格改为 flex：缩进占位、展开箭头、名称依次排列，
-   flex 会忽略节点间的空白文本，避免箭头行比叶子行多出一段空格 */
 ::v-deep .menu-name-cell .cell {
   display: flex;
   align-items: center;
 }
 
-/* 展开箭头与 Element 自带占位的右间距保持一致 */
 ::v-deep .menu-name-cell .el-table__expand-icon,
 ::v-deep .menu-name-cell .el-table__placeholder {
   margin-right: $menu-expand-gap;
 }
 
-/* Element 只给 level>0 的叶子行渲染 .el-table__placeholder；
-   顶层叶子（cell 内没有缩进和箭头，名称即第一个子元素）用 CSS 补等宽间距 */
 ::v-deep .menu-name-cell .cell > .menu-name:first-child {
   margin-left: $menu-expand-width + $menu-expand-gap;
 }
@@ -603,7 +568,6 @@ $menu-expand-gap: 3px;
   font-size: 12px;
 }
 
-/* 原生 title 的省略号样式（替代 show-overflow-tooltip） */
 .cell-ellipsis {
   display: block;
   overflow: hidden;
@@ -611,14 +575,12 @@ $menu-expand-gap: 3px;
   white-space: nowrap;
 }
 
-/* URL 列：超长地址换行显示（不再用省略号 + tooltip），横向可滚动时也不被截断 */
 ::v-deep .menu-url-cell .cell {
   white-space: normal;
   word-break: break-all;
   line-height: 1.5;
 }
 
-/* 排序：上下两个小按钮，竖排 */
 .sort-btns {
   display: flex;
   flex-direction: row;
@@ -633,7 +595,6 @@ $menu-expand-gap: 3px;
   font-size: 11px;
   line-height: 16px;
   border-radius: 2px;
-  // 主色 plain 风格，与系统蓝 #0088ff 一致
   background: #ecf5ff;
   border: 1px solid #b3d8ff;
   color: #0088ff;
@@ -657,7 +618,6 @@ $menu-expand-gap: 3px;
   }
 }
 
-/* 行内文字按钮：编辑蓝 / 新增绿 / 删除红（Element 语义色，与系统一致） */
 .link-btn {
   padding: 0 4px;
   color: #0088ff;
