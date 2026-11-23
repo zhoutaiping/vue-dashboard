@@ -38,6 +38,7 @@ export function qryMenuList(params) {
 /**
  * 查询菜单-按钮详情
  * GET /system/menu/info?id=
+ * data.apiPaths：绑定的后端接口路径数组
  */
 export function getMenuInfo(id) {
   return getRequest('/system/menu/info', { id })
@@ -47,6 +48,7 @@ export function getMenuInfo(id) {
  * 新增：目录、菜单、按钮
  * POST /system/menu/save
  * 目录/页面菜单额外带 sidebarShow(0 显示/1 不显示)、cacheFlag(0 缓存/1 不缓存)，按钮类型不带
+ * apiPaths：绑定的后端接口路径数组（如 ['/project/list']）
  */
 export function saveMenu(data) {
   return postRequest('/system/menu/save', data)
@@ -55,6 +57,7 @@ export function saveMenu(data) {
 /**
  * 编辑：目录、菜单、按钮（id 走 query，其余字段走 body）
  * POST /system/menu/update?id=
+ * apiPaths：绑定的后端接口路径数组；传空数组可清空
  */
 export function updateMenu(id, data) {
   return postRequest('/system/menu/update', data, { id })

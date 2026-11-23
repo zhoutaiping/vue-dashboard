@@ -140,6 +140,18 @@
             </el-select>
           </el-form-item>
         </el-col>
+
+        <el-col :span="24">
+          <el-form-item label="绑定接口">
+            <div class="api-path-list">
+              <div v-for="(path, index) in form.apiPaths" :key="index" class="api-path-list__row">
+                <el-input v-model="form.apiPaths[index]" clearable placeholder="如 /project/list" />
+                <el-button size="mini" type="primary" icon="el-icon-plus" circle @click="addApiPath" />
+                <el-button size="mini" type="danger" icon="el-icon-delete" circle @click="removeApiPath(index)" />
+              </div>
+            </div>
+          </el-form-item>
+        </el-col>
       </el-row>
     </el-form>
   </el-drawer>
@@ -288,8 +300,29 @@ export default {
         // 新增留空，强制用户选择；按钮类型不提交这两个字段
         sidebarShow: '',
         cacheFlag: '',
+        apiPaths: [''],
         regular: 1
       }
+    },
+    normalizeApiPaths(value) {
+      if (Array.isArray(value)) {
+        return value.map(item => String(item == null ? '' : item).trim()).filter(Boolean)
+      }
+      if (typeof value === 'string' && value.trim()) {
+        return value.split(',').map(item => item.trim()).filter(Boolean)
+      }
+      return []
+    },
+    toFormApiPaths(value) {
+      const list = this.normalizeApiPaths(value)
+      return list.length ? list : ['']
+    },
+    addApiPath() {
+      this.form.apiPaths.push('')
+    },
+    removeApiPath(index) {
+      this.form.apiPaths.splice(index, 1)
+      if (!this.form.apiPaths.length) this.form.apiPaths.push('')
     },
     // 标志位兼容后端返回 0/1 数字或字符串；缺省返回 fallback（新增为 '' 强制选择，编辑为 0）
     flagOf(value, fallback) {
@@ -341,7 +374,8 @@ export default {
           level0: Number(row.level0) || 1,
           orderNum: Number(row.orderNum) || 1,
           sidebarShow: this.flagOf(row.sidebarShow, 0),
-          cacheFlag: this.flagOf(row.cacheFlag, 0)
+          cacheFlag: this.flagOf(row.cacheFlag, 0),
+          apiPaths: this.toFormApiPaths(row.apiPaths)
         })
         this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
 
@@ -369,6 +403,7 @@ export default {
           // 详情接口为准：0/1 都要正确回显（0 不能被 || 吞掉）
           sidebarShow: this.flagOf(detail.sidebarShow, 0),
           cacheFlag: this.flagOf(detail.cacheFlag, 0),
+          apiPaths: this.toFormApiPaths(detail.apiPaths),
           regular: Number(detail.regular) === 0 ? 0 : 1
         })
         this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
@@ -420,8 +455,14 @@ export default {
         const pid = this.form.pid === ROOT_PID ? 0 : Number(this.form.pid) || 0
         // 目录/页面菜单都提交 menu，按钮提交 button；该字段必填，永远不给空值
         const meantype = this.menutypeOf(this.form) === 'button' ? 'button' : 'menu'
+        const apiPaths = this.normalizeApiPaths(this.form.apiPaths)
+        if (this.form.apiPaths.length > 1 && apiPaths.length < this.form.apiPaths.length) {
+          this.$message.warning('绑定接口存在空行')
+          return
+        }
         // 严格按文档的 MenuSaveDTO 提交：parentCode / level0 由后端自动维护与计算，这里不再重复传
         const payload = {
+          apiPaths,
           code: String(this.form.code || '').trim(),
           description: this.form.description || '',
           icon: this.isButtonType ? '' : this.form.icon || '',
@@ -526,6 +567,25 @@ export default {
 
   &__name {
     color: #606266;
+  }
+}
+
+.api-path-list {
+  width: 100%;
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+
+    .el-input {
+      flex: 1;
+    }
+
+    .el-button {
+      margin-left: 0;
+    }
   }
 }
 </style>

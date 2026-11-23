@@ -17,6 +17,7 @@
  *   level      菜单层级：1 一级菜单，2 二级菜单，3 三级菜单
  *   cacheFlag  是否缓存：0 缓存，1 不缓存（仅目录/页面菜单，按钮类型不带）
  *   sidebarShow 是否在左侧栏显示：0 显示，1 不显示（仅目录/页面菜单，按钮类型不带）
+ *   apiPaths   绑定的后端接口路径数组
  *   orderNum   菜单排序号
  *   regular    锁定标志：0 锁定（不可移动），1 可移动
  *   deleteFlag 删除标志：0 正常，1 已删除
@@ -142,6 +143,7 @@ const MENU_TREE = [
         deleteFlag: 0,
         cacheFlag: 0,
         sidebarShow: 0,
+        apiPaths: ['/system/menu/tree', '/system/menu/info'],
         children: [
           {
             id: 303,
@@ -158,6 +160,7 @@ const MENU_TREE = [
             orderNum: 1,
             regular: 1,
             deleteFlag: 0,
+            apiPaths: ['/system/menu/save'],
             children: []
           },
           {
@@ -218,6 +221,7 @@ function toDTO(node) {
     cacheFlag: node.cacheFlag === 1 ? 1 : 0,
     // 真实接口可能下发字符串 '1'，统一按数值判定隐藏，避免 DTO 环节把隐藏标志抹成 0
     sidebarShow: Number(node.sidebarShow) === 1 ? 1 : 0,
+    apiPaths: Array.isArray(node.apiPaths) ? node.apiPaths.slice() : [],
     regular: Number(node.regular) === 0 ? 0 : 1,
     deleteFlag: Number(node.deleteFlag) || 0,
     children
@@ -234,6 +238,9 @@ function flagOf(value) {
 // 请求体 → 接口 DTO（忽略非接口字段）
 function pickDTO(body) {
   const dto = {
+    apiPaths: Array.isArray(body.apiPaths)
+      ? body.apiPaths.map(item => String(item == null ? '' : item).trim()).filter(Boolean)
+      : [],
     code: String(body.code || '').trim(),
     description: String(body.description || ''),
     icon: body.icon ? String(body.icon) : '',
@@ -478,6 +485,7 @@ module.exports = [
         meantype: dto.meantype,
         icon: dto.icon || null,
         url: dto.url,
+        apiPaths: dto.apiPaths,
         level: parent ? Number(parent.level0 || parent.level) + 1 : 1,
         level0: parent ? Number(parent.level0 || parent.level) + 1 : 1,
         orderNum: dto.orderNum || siblings.length + 1,
@@ -524,6 +532,7 @@ module.exports = [
       node.meantype = dto.meantype
       node.icon = dto.icon || null
       node.url = dto.url
+      node.apiPaths = dto.apiPaths
       if (dto.orderNum) node.orderNum = dto.orderNum
       // 按钮类型不传标志位时保留原值，不误清
       if (dto.cacheFlag !== undefined) node.cacheFlag = dto.cacheFlag
