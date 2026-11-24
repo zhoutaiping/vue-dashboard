@@ -286,8 +286,8 @@ const now = new Date()
 const monthText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
 const minMonthDate = new Date(MIN_Y, MIN_M - 1, 1)
-const endMonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 13, 1)
+const endMonthDate = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 14, 1)
 if (endMonthDate < minMonthDate) endMonthDate.setTime(minMonthDate.getTime())
 if (startMonthDate < minMonthDate) startMonthDate.setTime(minMonthDate.getTime())
 export const DEFAULT_MONTH_RANGE = [monthText(startMonthDate), monthText(endMonthDate)]
