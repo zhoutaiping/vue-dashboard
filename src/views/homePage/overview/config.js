@@ -183,13 +183,12 @@ export const OVERVIEW_METRICS = [
 export const PIE_FIELD_MAP = { name: 'industry', value: 'projectCount' }
 
 // 顺序与 MANAGE_TREND_FIELDS 一一对应
-export const MANAGE_COLORS = ['#08f', '#0fc98f', '#F56C6C']
+export const MANAGE_COLORS = ['#08f', '#0fc98f']
 
 // field 对应 queryBuildandOperate 返回字段；bar=柱、line=折线
 export const MANAGE_TREND_FIELDS = [
   { field: 'constructionCount', label: '在建项目', type: 'bar' },
-  { field: 'operationCount', label: '运营项目', type: 'bar' },
-  { field: 'outstandingCount', label: '未结清项目', type: 'line' }
+  { field: 'operationCount', label: '运营项目', type: 'bar' }
 ]
 
 export const SUMMARY_ICONS_1 = {
@@ -286,7 +285,7 @@ const monthText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).p
 const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
 const minMonthDate = new Date(MIN_Y, MIN_M - 1, 1)
 const endMonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 14, 1)
+const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 13, 1)
 if (endMonthDate < minMonthDate) endMonthDate.setTime(minMonthDate.getTime())
 if (startMonthDate < minMonthDate) startMonthDate.setTime(minMonthDate.getTime())
 export const DEFAULT_MONTH_RANGE = [monthText(startMonthDate), monthText(endMonthDate)]
