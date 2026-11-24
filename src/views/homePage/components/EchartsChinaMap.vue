@@ -679,8 +679,8 @@ export default {
           padding: 0,
           extraCssText: 'box-shadow: none;',
           formatter: params => {
-            // 区域悬浮（交互8）：电价 + 与 spot 均价的差值
-            // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
+            // 区域悬浮（交互8）：电价 + 与标杆电价的差值
+            // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行
             if (params.seriesType === 'map' || params.componentType === 'geo') {
               const data = this.findRegionTooltipData(params.name)
               const selected = this.priceOptions.find(o => o.id === this.priceType)
@@ -695,18 +695,18 @@ export default {
                   const icon = `<img src="${priceIcon}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
                   const priceHtml = `${icon}<b>${hasV ? v : '--'}</b>`
                   if (item.noDiff) return priceHtml
-                  const spot = data ? pickPriceValue(data, item.spotField) : null
-                  const hasSpot = spot !== null
+                  const benchmark = data ? pickPriceValue(data, item.diffFields || item.diffField) : null
+                  const hasBenchmark = benchmark !== null
                   const vn = Number(v)
-                  const sn = Number(spot)
-                  // 差值所需字段为 null / 空（pickPriceValue 已把 "" 归一为 null）时无法计算，
-                  if (!hasV || !hasSpot || isNaN(vn) || isNaN(sn)) return priceHtml
-                  const diff = Math.round((vn - sn) * 100) / 100
+                  const bn = Number(benchmark)
+                  // 标杆电价缺失（pickPriceValue 已把 "" 归一为 null）时无法计算，只显示电价
+                  if (!hasV || !hasBenchmark || isNaN(vn) || isNaN(bn)) return priceHtml
+                  const diff = Math.round((vn - bn) * 100) / 100
                   let diffHtml
                   if (diff > 0) {
-                    diffHtml = `<span style="color:#2fc25b;">${diff.toFixed(2)}↓</span>`
+                    diffHtml = `<span style="color:#2fc25b;">${Math.abs(diff).toFixed(2)}↓</span>`
                   } else if (diff < 0) {
-                    diffHtml = `<span style="color:#f56c6c;">${diff.toFixed(2)}↑</span>`
+                    diffHtml = `<span style="color:#f56c6c;">${Math.abs(diff).toFixed(2)}↑</span>`
                   } else {
                     diffHtml = '<span style="color:#909399;">0.00</span>'
                   }

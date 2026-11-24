@@ -962,6 +962,14 @@ export default {
       this._suppressRankFetch = true
       this.query.rankType = value
     },
+    // 切换层级时：当前维度在新层级仍可用就保留，不可用才回退首项。
+    // 必须在改 level 前同步调用，否则 reportKey 会先用新层级 + 旧维度发一次无效请求
+    ensureRankTypeFor(level) {
+      const options = this.rankOptionsFor(level)
+      if (!options.some(item => item.value === this.query.rankType)) {
+        this.setRankType(options[0].value)
+      }
+    },
     // 点击排名：全国→省/区域；已下钻到拆分省份时，点击区域名可在区域间切换
     handleRankClick(row) {
       if (this.query.level === 'country') {
@@ -984,12 +992,10 @@ export default {
       }
     },
     drillToProvince(code, name, region = '') {
-      // 从全国下钻到省份：排名维度重置为省内首项
-      // 省内切换区域（蒙西↔蒙东等）不算重新下钻，保留用户当前维度
+      // 排名维度在省内仍可用则保留（如达标率/装机容量/利用小时数），
+      // 只有「项目个数」这类省内没有的维度才回退到省内首项
       const fromCountry = this.query.level === 'country'
-      if (fromCountry) {
-        this.setRankType(this.rankOptionsFor('province')[0].value)
-      }
+      this.ensureRankTypeFor('province')
       this.query.level = 'province'
       this.query.provinceCode = code
       // 地图点位来自 provinceGroups：省份 GeoJSON 会先于接口数据落地，
@@ -1068,7 +1074,8 @@ export default {
       return merged
     },
     handleMapBack() {
-      this.setRankType(this.rankOptionsFor('country')[0].value)
+      // 省内维度在全国均存在，返回全国时保持用户当前选择
+      this.ensureRankTypeFor('country')
       this.query.level = 'country'
       this.query.provinceCode = ''
       this.query.regionName = ''

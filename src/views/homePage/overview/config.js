@@ -272,10 +272,10 @@ export function pickPriceFields(source) {
   return out
 }
 
-// 差值 = 电价 - spot 均价；>0 绿↓，<0 红↑
+// 差值 = 电价 - 标杆电价；区域接口不返回 spot 均价，统一以 benchmarkPrice 为基准；>0 绿↓，<0 红↑
 export const REGION_PRICE_COMPARE = [
-  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'], spotField: 'spotPvSettlementPrice' },
-  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'], spotField: 'spotWindSettlementPrice' },
+  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'], diffFields: ['benchmarkPrice', 'benchmarkPrice1'] },
+  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'], diffFields: ['benchmarkPrice', 'benchmarkPrice1'] },
   { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice', 'benchmarkPrice1'], nationalOnly: true, noDiff: true }
 ]
 
