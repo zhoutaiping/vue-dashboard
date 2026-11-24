@@ -1,6 +1,6 @@
 <template>
   <div class="rank-list">
-    <div v-if="tabs && tabs.length" class="rank-list__tabs">
+    <div v-if="tabs && tabs.length" ref="tabs" class="rank-list__tabs" @wheel="handleTabsWheel">
       <span
         v-for="tab in tabs"
         :key="tab.value"
@@ -90,6 +90,18 @@ export default {
     }
   },
   methods: {
+    // 横向 tab 溢出时把垂直滚轮转成横向滚动；到达两端或没有溢出时不拦截，页面仍可正常滚动
+    handleTabsWheel(event) {
+      const el = this.$refs.tabs
+      if (!el || el.scrollWidth <= el.clientWidth) return
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+      if (!delta) return
+      const max = el.scrollWidth - el.clientWidth
+      const next = el.scrollLeft + delta
+      if ((delta < 0 && el.scrollLeft <= 0) || (delta > 0 && el.scrollLeft >= max)) return
+      event.preventDefault()
+      el.scrollLeft = Math.max(0, Math.min(next, max))
+    },
     tabText(tab) {
       return tab.unit ? `${tab.label}(${tab.unit})` : tab.label
     },
@@ -117,12 +129,37 @@ export default {
   &__tabs {
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
-    padding-bottom: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-width: 0;
+    padding-bottom: 10px;
     border-bottom: 1px solid #f0f2f5;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(144, 147, 153, 0.6) #f0f2f5;
+
+    &::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: #f0f2f5;
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(144, 147, 153, 0.6);
+      border-radius: 4px;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background: rgba(144, 147, 153, 0.9);
+    }
   }
 
   &__tab {
+    flex-shrink: 0;
     font-size: 12px;
     color: #606266;
     cursor: pointer;
