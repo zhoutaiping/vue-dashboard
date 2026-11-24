@@ -355,6 +355,25 @@ export default {
     }
   },
   methods: {
+    // 地图区域名 → tooltip 数据：GeoJSON 的省级名是短名（贵州），市级名带后缀（贵阳市），
+    // 而接口分组名可能写全称/短名两种口径；按原名、去后缀、补后缀逐级匹配，避免 tooltip 取不到数据
+    findRegionTooltipData(name) {
+      const source = this.regionTooltipData || {}
+      const raw = String(name || '').trim()
+      if (!raw) return null
+      if (source[raw]) return source[raw]
+      const stripped = raw.replace(/(省|市|自治区|特别行政区|地区|盟|自治州)$/, '')
+      if (stripped && stripped !== raw) {
+        if (source[stripped]) return source[stripped]
+        const withCity = `${stripped}市`
+        if (source[withCity]) return source[withCity]
+      }
+      const withSuffix = Object.keys(source).find(key => {
+        const keyStripped = String(key || '').trim().replace(/(省|市|自治区|特别行政区|地区|盟|自治州)$/, '')
+        return keyStripped === stripped || keyStripped === raw
+      })
+      return withSuffix ? source[withSuffix] : null
+    },
     // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径：
     calcSideInset() {
       const width = this.chart ? this.chart.getWidth() : 0
@@ -663,7 +682,7 @@ export default {
             // 区域悬浮（交互8）：电价 + 与 spot 均价的差值
             // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行（无市区级标杆数据）
             if (params.seriesType === 'map' || params.componentType === 'geo') {
-              const data = this.regionTooltipData[params.name]
+              const data = this.findRegionTooltipData(params.name)
               const selected = this.priceOptions.find(o => o.id === this.priceType)
               const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
               const list = selected ? base.filter(item => item.field === selected.field) : base

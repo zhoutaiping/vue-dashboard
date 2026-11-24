@@ -224,9 +224,9 @@ export const SUBSIDY_FILTERS = ['无补贴', '已补贴']
 
 // fields 为候选字段，按序取第一个有效值
 export const PRICE_OPTIONS = [
-  { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice'] },
-  { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice'] },
-  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'] }
+  { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'] },
+  { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'] },
+  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice', 'benchmarkPrice1'] }
 ]
 
 export function pickPriceValue(obj, fields) {
@@ -249,7 +249,10 @@ export const PRICE_DTO_FIELDS = [
   'windSettlementPrice',
   'benchmarkPrice',
   'spotWindSettlementPrice',
-  'spotPvSettlementPrice'
+  'spotPvSettlementPrice',
+  'avgWindSettlementPrice1',
+  'avgPvSettlementPrice1',
+  'benchmarkPrice1'
 ]
 
 export function pickPriceFields(source) {
@@ -270,9 +273,9 @@ export function pickPriceFields(source) {
 
 // 差值 = 电价 - spot 均价；>0 绿↓，<0 红↑
 export const REGION_PRICE_COMPARE = [
-  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice'], spotField: 'spotPvSettlementPrice' },
-  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice'], spotField: 'spotWindSettlementPrice' },
-  { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
+  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'], spotField: 'spotPvSettlementPrice' },
+  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'], spotField: 'spotWindSettlementPrice' },
+  { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice', 'benchmarkPrice1'], nationalOnly: true, noDiff: true }
 ]
 
 // 数据起始月份
@@ -282,8 +285,8 @@ const now = new Date()
 const monthText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 const [MIN_Y, MIN_M] = MIN_MONTH.split('-').map(Number)
 const minMonthDate = new Date(MIN_Y, MIN_M - 1, 1)
-const endMonthDate = new Date(now.getFullYear(), now.getMonth(), 1)
-const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+const endMonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1)
+const startMonthDate = new Date(now.getFullYear(), now.getMonth() - 14, 1)
 if (endMonthDate < minMonthDate) endMonthDate.setTime(minMonthDate.getTime())
 if (startMonthDate < minMonthDate) startMonthDate.setTime(minMonthDate.getTime())
 export const DEFAULT_MONTH_RANGE = [monthText(startMonthDate), monthText(endMonthDate)]
