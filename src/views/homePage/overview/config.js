@@ -226,13 +226,6 @@ export const BUILD_FILTERS = [
 
 export const SUBSIDY_FILTERS = ['无补贴', '已补贴']
 
-// 展示字段按 /largeScreen/mapDisplay/price 接口文档取值，不设候选兜底
-export const PRICE_OPTIONS = [
-  { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice'] },
-  { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice'] },
-  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'] }
-]
-
 export function pickPriceValue(obj, fields) {
   if (!obj) return null
   const list = Array.isArray(fields) ? fields : [fields]
@@ -244,15 +237,6 @@ export function pickPriceValue(obj, fields) {
   }
   return null
 }
-
-// 电价接口响应字段，按接口文档取值，不兼容未定义的字段
-export const PRICE_DTO_FIELDS = [
-  'avgPvSettlementPrice',
-  'avgWindSettlementPrice',
-  'benchmarkPrice',
-  'pvSettlementPrice',
-  'windSettlementPrice'
-]
 
 export function pickPriceFields(source) {
   if (!source || typeof source !== 'object') return null
@@ -270,11 +254,27 @@ export function pickPriceFields(source) {
   return out
 }
 
-// 悬浮展示与差值计算字段均按接口文档取值：电价取平均结算电价，差值基准取标杆电价；>0 绿↓，<0 红↑
+// 展示字段按接口实际有值口径取：风电/光伏结算电价对应 windSettlementPrice / pvSettlementPrice
+export const PRICE_OPTIONS = [
+  { id: 'wind', label: '风电结算电价', field: 'windSettlementPrice', fields: ['windSettlementPrice'] },
+  { id: 'pv', label: '光伏结算电价', field: 'pvSettlementPrice', fields: ['pvSettlementPrice'] },
+  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'] }
+]
+
+// 悬浮展示取 windSettlementPrice / pvSettlementPrice，括号内差值 = 电价 - 平均电价>0 绿↓，<0 红↑
 export const REGION_PRICE_COMPARE = [
-  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice'], diffFields: ['benchmarkPrice'] },
-  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice'], diffFields: ['benchmarkPrice'] },
+  { label: '光伏结算电价', field: 'pvSettlementPrice', fields: ['pvSettlementPrice'], diffFields: ['avgPvSettlementPrice'] },
+  { label: '发电结算电价', field: 'windSettlementPrice', fields: ['windSettlementPrice'], diffFields: ['avgWindSettlementPrice'] },
   { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
+]
+
+// 电价接口响应字段，按接口文档取值，不兼容未定义的字段
+export const PRICE_DTO_FIELDS = [
+  'avgPvSettlementPrice',
+  'avgWindSettlementPrice',
+  'benchmarkPrice',
+  'pvSettlementPrice',
+  'windSettlementPrice'
 ]
 
 // 数据起始月份

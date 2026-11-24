@@ -176,9 +176,6 @@ function buildProvinceGroup(province, seed) {
     avgWindSettlementPrice: String(randomInt(25, 55, seed + 1) / 100),
     avgPvSettlementPrice: String(randomInt(25, 55, seed + 2) / 100),
     benchmarkPrice: String(randomInt(25, 50, seed + 3) / 100),
-    // spot 均价：区域悬浮 tooltip 的差值对比基准（电价 - spot 均价）
-    spotWindSettlementPrice: String(randomInt(25, 55, seed + 21) / 100),
-    spotPvSettlementPrice: String(randomInt(25, 55, seed + 23) / 100),
     projectList: list
   }
 }
@@ -214,9 +211,6 @@ function buildCityPriceList(province) {
         avgPvSettlementPrice: String(randomInt(25, 55, seed + 2) / 100),
         // 悬浮字段含标杆电价，市区粒度同步提供（菜单维度不含标杆）
         benchmarkPrice: String(randomInt(25, 50, seed + 3) / 100),
-        // spot 均价：市区悬浮 tooltip 的差值对比基准（下钻视图仅展示光伏/发电两行）
-        spotWindSettlementPrice: String(randomInt(25, 55, seed + 21) / 100),
-        spotPvSettlementPrice: String(randomInt(25, 55, seed + 23) / 100),
         projectCount: randomInt(2, 24, seed + 5)
       }
     })
@@ -227,14 +221,13 @@ function buildCityPriceList(province) {
 // seed 带固定偏移（+300 起），保证与 mapDisplay 里的电价不同 —— 前端一旦回退到旧字段，
 // 页面数值会立刻变化，便于自检「电价是不是真的走了新接口」
 function buildPriceOnly(seed) {
-  const pv = String(randomInt(25, 55, seed + 301) / 100)
-  const wind = String(randomInt(25, 55, seed + 302) / 100)
+  // 平均结算电价与结算价分开随机，tooltip 差值（结算价 - 平均价）才有实际意义
   return {
-    avgPvSettlementPrice: pv,
-    avgWindSettlementPrice: wind,
+    avgPvSettlementPrice: String(randomInt(25, 55, seed + 301) / 100),
+    avgWindSettlementPrice: String(randomInt(25, 55, seed + 302) / 100),
     benchmarkPrice: String(randomInt(25, 50, seed + 303) / 100),
-    pvSettlementPrice: pv,
-    windSettlementPrice: wind
+    pvSettlementPrice: String(randomInt(25, 55, seed + 311) / 100),
+    windSettlementPrice: String(randomInt(25, 55, seed + 312) / 100)
   }
 }
 

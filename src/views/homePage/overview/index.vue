@@ -544,9 +544,7 @@ export default {
       return map
     },
     // 全国视图 → 各省汇总值；省份下钻 → 该省各市区值（按市区粒度着色，visualMap 随之展示）
-    // 取值兼容：字段候选列表（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.4155"）；
-    // 电价取值兼容：字段候选（avgXxx 为 null 时回退 xxx）+ 字符串数值（"0.3655"）；
-    // 真实结算电价数值较小（0.0001~0.3655），0 也是有效值 —— 可解析即入色阶，仅字段缺失保持白色
+    // 电价字段按接口文档取值，字符串数值可解析即入色阶；0 也是有效值，字段缺失保持白色
     // 未选中（priceType 为空）→ 返回空数组，地图不着色（纯白，交互7）
     provincePrices() {
       const option = PRICE_OPTIONS.find(o => o.id === this.priceType)
@@ -560,10 +558,20 @@ export default {
         return { name, value: num }
       }
       if (this.query.level === 'country') {
-        // 全国层级：后端按区域返回（蒙西/蒙东、冀北/河北南网），区域的汇总电价直接取分组字段，
-        // 与其它省份走同一套取值逻辑；countryGroups 已剔除被区域替换掉的整省分组
-        return this.countryGroups
-          .map(group => toDatum(this.resolveGroupName(group), group))
+        // 全国层级：以地图分组为底，再并入电价接口里没有项目分组的区域（如贵州只有电价），
+        // 否则这部分区域既不着色、浮层也取不到电价
+        const sources = {}
+        this.countryGroups.forEach(group => {
+          const name = this.resolveGroupName(group)
+          if (name) sources[name] = group
+        })
+        ;(this.priceGroups || []).forEach(item => {
+          const raw = item._short || item.name
+          const name = normalizeRegionName(raw) || raw
+          if (name && !sources[name]) sources[name] = item.fields
+        })
+        return Object.keys(sources)
+          .map(name => toDatum(name, sources[name]))
           .filter(d => d && d.name)
       }
       // 省份下钻：地市条目兼容「cityPriceList」与「地市 key 映射」两种返回，见 provinceCityEntries
@@ -684,6 +692,14 @@ export default {
         // 省名 / 区域名统一归一（区域优先，含别名）
         const name = this.resolveGroupName(group)
         map[name] = Object.assign({ projectCount: (group.projectList || []).length }, group)
+      })
+      // 电价接口可能返回 mapDisplay 里没有项目、因而没有分组的区域（如只有电价没有项目的贵州），
+      // 也要进入浮层；电价字段以电价接口为准覆盖分组自带字段
+      ;(this.priceGroups || []).forEach(item => {
+        const raw = item._short || item.name
+        const name = normalizeRegionName(raw) || raw
+        if (!name) return
+        map[name] = Object.assign({ projectCount: 0 }, map[name] || {}, item.fields)
       })
       return map
     },
