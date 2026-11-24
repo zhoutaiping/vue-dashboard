@@ -789,8 +789,13 @@ export default {
       let left = inputRect.left + (inputRect.width - panelRect.width) / 2
       const maxLeft = window.innerWidth - panelRect.width - 8
       left = Math.max(8, Math.min(left, maxLeft))
-      panel.style.left = `${Math.round(left - inputRect.left)}px`
-      panel.style.top = `${Math.round(inputRect.height + 6)}px`
+      // 全屏后 .home-overview 被置为 fixed，弹层的 offsetParent 从输入框变成 body，
+      // 必须按真正的 offsetParent 换算 left/top，否则会按 0 原点定位到视口最左侧
+      const parentRect = panel.offsetParent
+        ? panel.offsetParent.getBoundingClientRect()
+        : { left: 0, top: 0 }
+      panel.style.left = `${Math.round(left - parentRect.left)}px`
+      panel.style.top = `${Math.round(inputRect.bottom + 6 - parentRect.top)}px`
     },
     handleFullscreenChange() {
       this.$nextTick(() => {
