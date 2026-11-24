@@ -49,10 +49,12 @@
           />
         </div>
         <div class="home-overview__toolbar-right">
+          <!-- 面板留在全屏元素子树内：挂到 body 时全屏下不会渲染 -->
           <el-date-picker
             v-model="query.monthRange"
             class="month-range-picker"
             type="monthrange"
+            align="center"
             size="small"
             :clearable="false"
             :append-to-body="false"
@@ -1161,6 +1163,12 @@ export default {
 }
 .home-overview__toolbar-right ::v-deep .month-range-picker .el-range-input::placeholder {
   color: rgba(255, 255, 255, 0.75);
+}
+
+/* 大屏 zoom 放大后，Popper 按视觉像素算出的 left/top 在 zoom 容器内会被二次放大；
+   面板按缩放系数反向 zoom，保留 Popper 的居中与左右避让（空间不够自动往左移） */
+.home-overview__toolbar-right ::v-deep .month-range-picker .el-picker-panel {
+  zoom: calc(1 / var(--ui-scale, 1));
 }
 
 .home-overview {
