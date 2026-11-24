@@ -150,7 +150,7 @@ export const OPERATE_TYPE_MAP = { wind: '1', pv: '2' }
 
 const POWER_METRICS = [
   { label: '项目总数', field: ['projectCount'], unit: '个' },
-  { label: '待补贴项目数', field: ['subCount'], unit: '个' },
+  { label: '带补贴项目数', field: ['subCount'], unit: '个' },
   { label: '装机容量', field: ['capacity'], unit: 'MW' },
   { label: '上网电量', field: ['onlinePower'], unit: '万kWh' },
   { label: '利用小时数', field: ['usehour', 'useHour', 'useHours'], unit: 'h' },
@@ -193,7 +193,7 @@ export const MANAGE_TREND_FIELDS = [
 
 export const SUMMARY_ICONS_1 = {
   项目总数: listIcon1,
-  待补贴项目数: listIcon9,
+  带补贴项目数: listIcon9,
   装机容量: listIcon2,
   上网电量: listIcon3,
   利用小时数: listIcon4,
@@ -202,7 +202,7 @@ export const SUMMARY_ICONS_1 = {
 
 export const SUMMARY_ICONS_2 = {
   项目总数: listIcon1,
-  待补贴项目数: listIcon9,
+  带补贴项目数: listIcon9,
   装机容量: listIcon2,
   上网电量: listIcon3,
   利用小时数: listIcon4,
