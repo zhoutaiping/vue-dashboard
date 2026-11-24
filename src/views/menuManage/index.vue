@@ -14,16 +14,8 @@
         <el-button size="small" class="menu-manage__ghost-btn" @click="toggleExpandAll">
           {{ expandAll ? '全部收起' : '全部展开' }}
         </el-button>
-        <el-button
-          size="small"
-          class="menu-manage__ghost-btn"
-          icon="el-icon-edit-outline"
-          @click="handleFixMenuCode"
-        >
-          修复编码
-        </el-button>
       </div>
-      <span class="menu-manage__count">共 {{ totalCount }} 项</span>
+      <span class="menu-manage__count">共 {{ visibleCount }} 项</span>
     </div>
 
     <el-table
@@ -41,13 +33,16 @@
     >
       <el-table-column
         prop="name"
+        fixed="left"
         label="菜单名称"
         width="220"
         class-name="menu-name-cell"
         label-class-name="menu-name-cell"
+        header-align="center"
+        align="left"
       >
         <template slot-scope="{ row }">
-          <span class="menu-name" :title="row.name">{{ row.name }}</span>
+          <span class="menu-name" :title="row.name" v-html="highlightMatch(row.name)" />
         </template>
       </el-table-column>
 
@@ -59,15 +54,9 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="code" label="权限编码" min-width="150">
+      <el-table-column prop="code" label="权限编码" min-width="150" header-align="center" align="left">
         <template slot-scope="{ row }">
-          <span class="cell-ellipsis" :title="row.code">{{ row.code }}</span>
-        </template>
-      </el-table-column>
-
-      <el-table-column prop="menuCode" label="前端菜单编码" min-width="250">
-        <template slot-scope="{ row }">
-          <span class="cell-ellipsis" :title="row.menuCode">{{ row.menuCode }}</span>
+          <span class="cell-ellipsis" :title="row.code" v-html="highlightMatch(row.code)" />
         </template>
       </el-table-column>
 
@@ -89,7 +78,20 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="url" label="路由地址（URL）" min-width="280" class-name="menu-url-cell">
+      <el-table-column prop="menuCode" label="前端菜单编码" min-width="250" header-align="center" align="left">
+        <template slot-scope="{ row }">
+          <span class="cell-ellipsis" :title="row.menuCode" v-html="highlightMatch(row.menuCode)" />
+        </template>
+      </el-table-column>
+
+      <el-table-column
+        prop="url"
+        label="路由地址（URL）"
+        min-width="280"
+        header-align="center"
+        align="left"
+        class-name="menu-url-cell"
+      >
         <template slot-scope="{ row }">
           <span class="menu-url">{{ row.url || '--' }}</span>
         </template>
@@ -98,12 +100,7 @@
       <el-table-column label="排序操作" width="186" align="center">
         <template slot-scope="{ row }">
           <div class="sort-btns">
-            <el-button
-              size="mini"
-              class="sort-btn"
-              :disabled="isFirstSibling(row)"
-              @click.stop="handleMove(row, 'up')"
-            >
+            <el-button size="mini" class="sort-btn" :disabled="isFirstSibling(row)" @click.stop="handleMove(row, 'up')">
               <i class="el-icon-caret-top" /> 上移
             </el-button>
             <el-button
@@ -118,11 +115,21 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="196" align="center">
+      <el-table-column label="操作" width="196" align="center" fixed="right">
         <template slot-scope="{ row }">
           <el-button type="text" size="mini" class="link-btn" @click.stop="handleEdit(row)">编辑</el-button>
-          <el-button type="text" size="mini" class="link-btn link-btn--add" @click.stop="handleAddChild(row)">新增下级</el-button>
-          <el-button type="text" size="mini" class="link-btn link-btn--danger" @click.stop="handleDelete(row)">删除</el-button>
+          <el-button
+            type="text"
+            size="mini"
+            class="link-btn link-btn--add"
+            @click.stop="handleAddChild(row)"
+          >新增下级</el-button>
+          <el-button
+            type="text"
+            size="mini"
+            class="link-btn link-btn--danger"
+            @click.stop="handleDelete(row)"
+          >删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -159,6 +166,7 @@ export default {
       batchSyncing: false,
       tableHeight: 560,
       expandedOnce: false,
+      expandAllBeforeSearch: null,
       drawerVisible: false,
       drawerMode: 'add', // add 新增顶级 / addChild 新增下级 / edit 编辑
       editingRow: null,
@@ -168,11 +176,20 @@ export default {
   computed: {
     tableData() {
       return this.filterTree(this.rawList, this.keyword)
+    },
+    visibleCount() {
+      return this.keyword ? this.countTree(this.tableData) : this.totalCount
     }
   },
   watch: {
     keyword(val) {
-      if (val) this.expandAll = true
+      if (val) {
+        if (this.expandAllBeforeSearch === null) this.expandAllBeforeSearch = this.expandAll
+        this.expandAll = true
+      } else if (this.expandAllBeforeSearch !== null) {
+        this.expandAll = this.expandAllBeforeSearch
+        this.expandAllBeforeSearch = null
+      }
       this.$nextTick(this.applyExpandAll)
     }
   },
@@ -293,18 +310,33 @@ export default {
     countTree(list) {
       return (list || []).reduce((sum, item) => sum + 1 + this.countTree(item.children), 0)
     },
+    // 按菜单名称 / 权限编码 / 前端菜单编码模糊搜索；每层都递归过滤，命中节点靠 children.length 把父链带回，
+    // 父节点命中时其子节点同样按关键词过滤，避免带出与关键词无关的子树
     filterTree(list, keyword) {
       const kw = String(keyword || '').trim().toLowerCase()
-      if (!kw) return list || []
-      const result = []
-      ;(list || []).forEach(node => {
-        const hit = [node.name, node.code, node.menuCode, node.url].some(val => String(val || '').toLowerCase().indexOf(kw) > -1)
-        const children = hit ? (node.children || []) : this.filterTree(node.children, keyword)
+      const walk = nodes => (nodes || []).reduce((result, node) => {
+        const children = walk(node.children)
+        // 关键词为空时全部命中：始终返回新建对象数组，与搜索态结构一致，
+        // 避免 el-table 树形模式按 row-key 复用旧节点导致清空后不恢复完整数据
+        const hit = !kw || [node.name, node.code, node.menuCode]
+          .some(val => String(val || '').toLowerCase().indexOf(kw) > -1)
         if (hit || children.length) {
           result.push(Object.assign({}, node, { children }))
         }
-      })
-      return result
+        return result
+      }, [])
+      return walk(list)
+    },
+    highlightMatch(value) {
+      const text = String(value || '')
+      const kw = String(this.keyword || '').trim()
+      if (!kw) return this.escapeHtml(text)
+      const escaped = this.escapeHtml(text)
+      const pattern = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return escaped.replace(new RegExp(pattern, 'ig'), match => `<em class="menu-search__hit">${match}</em>`)
+    },
+    escapeHtml(text) {
+      return String(text || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch])
     },
     expandFirstParent() {
       if (this.expandAll || this.keyword || !this.$refs.table) return
@@ -471,7 +503,7 @@ export default {
         cancelButtonText: '取消'
       })
         .then(() => that.doDelete(row))
-        .catch(() => {})
+        .catch(() => { })
     },
     async doDelete(row) {
       const res = await deleteMenu(row.id)
@@ -532,7 +564,7 @@ $menu-expand-gap: 3px;
   margin-right: $menu-expand-gap;
 }
 
-::v-deep .menu-name-cell .cell > .menu-name:first-child {
+::v-deep .menu-name-cell .cell>.menu-name:first-child {
   margin-left: $menu-expand-width + $menu-expand-gap;
 }
 
@@ -544,6 +576,12 @@ $menu-expand-gap: 3px;
   white-space: nowrap;
   font-weight: 500;
   color: #303133;
+}
+
+.menu-search__hit {
+  color: #409eff;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .menu-svg-icon {
@@ -603,7 +641,7 @@ $menu-expand-gap: 3px;
     font-size: 10px;
   }
 
-  & + .sort-btn {
+  &+.sort-btn {
     margin-left: 0;
   }
 
@@ -642,6 +680,4 @@ $menu-expand-gap: 3px;
     }
   }
 }
-
 </style>
-
