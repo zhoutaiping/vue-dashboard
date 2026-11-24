@@ -34,6 +34,9 @@ export const CATEGORIES = [
 
 export const INDUSTRY_ALL = '全部'
 
+// 行业分类 → 运营项目情况的能源类型选项
+export const CATEGORY_ENERGY_TYPE = { wind: 'wind', groundPv: 'pv' }
+
 // 兼容旧引用
 export const POWER_CATEGORY_ID = 'power'
 

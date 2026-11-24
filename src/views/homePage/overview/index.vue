@@ -51,6 +51,7 @@
         <div class="home-overview__toolbar-right">
           <!-- 面板留在全屏元素子树内：挂到 body 时全屏下不会渲染 -->
           <el-date-picker
+            ref="monthRangePicker"
             v-model="query.monthRange"
             class="month-range-picker"
             type="monthrange"
@@ -165,6 +166,7 @@ import {
 import {
   CATEGORIES,
   CATEGORY_FIELD_MAP,
+  CATEGORY_ENERGY_TYPE,
   RANK_TYPES,
   REGION_RANK_TYPES,
   RANK_FIELD_MAP,
@@ -383,9 +385,18 @@ export default {
     defaultPriceType() {
       return PRICE_OPTIONS[0].id
     },
-    // 行业只影响接口入参 industry；某个类型在当前行业下没有项目时，
+    // 行业筛选为单一类型时，运营项目情况只保留对应能源类型；其余情况保留两个
+    availableEnergyTypes() {
+      if (this.categoryNone) return ENERGY_TYPE_KEYS.slice()
+      const selected = this.query.categories || []
+      if (selected.length === 1) {
+        const type = CATEGORY_ENERGY_TYPE[selected[0]]
+        if (type && ENERGY_TYPE_KEYS.includes(type)) return [type]
+      }
+      return ENERGY_TYPE_KEYS.slice()
+    },
     energyTypeOptions() {
-      return ENERGY_TYPE_KEYS.map(key => ({ key, label: this.energyLabels[key] }))
+      return this.availableEnergyTypes.map(key => ({ key, label: this.energyLabels[key] }))
     },
     // 地图状态筛选（在建/运营多选）→ 接口 status 枚举
     statusParam() {
@@ -711,6 +722,12 @@ export default {
       this.fetchRank()
     },
     operateEnergyType() {
+      // 行业切换引起的自动校正不单独发请求（由 fetchAll 带上新 industry 统一取数），
+      // 否则会 nextSeq 作废同批其它请求，表现为图表停在旧数据
+      if (this._suppressOperateFetch) {
+        this._suppressOperateFetch = false
+        return
+      }
       this.fetchOperateDetail()
     },
     // 层级切换时兜底校正排名维度：当前维度不在新层级枚举内则回退到首项
@@ -733,9 +750,18 @@ export default {
       this._resizeObserver = new ResizeObserver(this.measurePageWidth)
       this._resizeObserver.observe(this.$el)
     }
+    // Popper 的 viewport 边界计算在全屏/zoom 下会把面板推偏：每次 Popper 更新后接管 left/top
+    const picker = this.$refs.monthRangePicker
+    if (picker) {
+      picker.popperOptions = Object.assign({}, picker.popperOptions, {
+        onUpdate: () => this.$nextTick(this.alignMonthPanel)
+      })
+    }
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange)
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.measurePageWidth)
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
     if (this._resizeObserver) {
       this._resizeObserver.disconnect()
       this._resizeObserver = null
@@ -749,8 +775,32 @@ export default {
       if (window.innerWidth !== this.viewportWidth) this.viewportWidth = window.innerWidth
       if (window.innerHeight !== this.viewportHeight) this.viewportHeight = window.innerHeight
     },
-    // 统一请求：单个接口失败不影响其他模块
+    // 弹层相对输入框居中；右侧放不下时整体左移到视口内。
+    // 面板已按 --ui-scale 反向 zoom，left/top 的 px 与视觉像素 1:1，无需再除缩放系数
+    alignMonthPanel() {
+      const picker = this.$refs.monthRangePicker
+      const input = picker && picker.$el
+      const panel = picker && picker.popperElm
+      // append-to-body 保持 false：面板必须是输入框子节点，才属于全屏元素子树
+      if (!input || !panel || panel.parentNode !== input) return
+      const inputRect = input.getBoundingClientRect()
+      const panelRect = panel.getBoundingClientRect()
+      if (!inputRect.width || !panelRect.width) return
+      let left = inputRect.left + (inputRect.width - panelRect.width) / 2
+      const maxLeft = window.innerWidth - panelRect.width - 8
+      left = Math.max(8, Math.min(left, maxLeft))
+      panel.style.left = `${Math.round(left - inputRect.left)}px`
+      panel.style.top = `${Math.round(inputRect.height + 6)}px`
+    },
+    handleFullscreenChange() {
+      this.$nextTick(() => {
+        const picker = this.$refs.monthRangePicker
+        if (picker && picker.pickerVisible && picker.updatePopper) picker.updatePopper()
+      })
+    },
+    // 统一请求：行业全不选时不发任何接口；单个接口失败不影响其他模块
     async safeRequest(fn, defaultValue) {
+      if (this.categoryNone) return defaultValue
       try {
         const res = await fn()
         return res && res.code === 200 ? res.data : defaultValue
@@ -767,6 +817,8 @@ export default {
       return seq !== this.reqSeq
     },
     clearReportData() {
+      // 同时作废在途请求，避免清空后旧响应回写
+      this.nextSeq()
       this.overview = {}
       this.manageList = []
       this.operateDetail = {}
@@ -777,16 +829,13 @@ export default {
     async fetchOverview(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview(this.reportParams), {})
       if (this.isStale(seq)) return
-      // 全不选时报表必须保持无值，所以照常发请求但不采用其响应
-      if (this.categoryNone) return
       this.overview = data || {}
     },
     // 行业分布（顶部 tabs 计数 + 项目总览饼图）：同一接口但不传行业，
     async fetchIndustryStats(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryProjectOverview({
         ...this.reportParams,
-        // 计数始终按「全部」口径取：全不选时 industry 为空数组，
-        // 若跟着传空数组会把 tabs 上的行业数量查没，筛选器就点不回去了
+        // 计数始终按「全部」口径取，保证筛选器上的行业数量不被当前筛选条件影响
         industry: this.allIndustryNames
       }), {})
       if (this.isStale(seq)) return
@@ -797,7 +846,6 @@ export default {
     async fetchManageTrend(seq = this.nextSeq()) {
       const data = await this.safeRequest(() => queryBuildandOperate(this.reportParams), [])
       if (this.isStale(seq)) return
-      if (this.categoryNone) return
       this.manageList = Array.isArray(data) ? data : []
     },
     // 地区排名：全国/省内双接口，返回 [{ nameType, value }] 全称数据
@@ -807,7 +855,6 @@ export default {
       const api = isCountry ? queryNationalRanking : queryRegionRanking
       const data = await this.safeRequest(() => api(this.rankParams), [])
       if (this.isStale(seq)) return
-      if (this.categoryNone) return
       const list = Array.isArray(data) ? data : []
       this.rankList = list.map(item => {
         const fullName = item.nameType || ''
@@ -840,13 +887,13 @@ export default {
       })
       const data = await this.safeRequest(() => queryOperateDetail(params), {})
       if (this.isStale(seq)) return
-      if (this.categoryNone) return
       this.operateDetail = data || {}
     },
 
     async fetchAll() {
+      // 行业全不选：不发任何接口，报表数据由 setCategories → clearReportData 保证为空
+      if (this.categoryNone) return
       const seq = this.nextSeq()
-      // 行业「全不选」同样走这条链路：industry 传空数组，由接口返回空结果集
       await Promise.all([
         this.fetchOverview(seq),
         this.fetchIndustryStats(seq),
@@ -943,6 +990,12 @@ export default {
       this.query.categories = list
       // 进入「全不选」立即清空报表，不等接口返回（industry=[] 会被后端当「全部」，
       if (none) this.clearReportData()
+      // 行业收窄后当前能源类型不可用时同步校正，抑制单独请求，交给本批 fetchAll 统一取数
+      const types = this.availableEnergyTypes
+      if (!types.includes(this.operateEnergyType)) {
+        this._suppressOperateFetch = true
+        this.operateEnergyType = types[0]
+      }
     },
     // 行业只影响接口入参 industry；某维度在当前行业下没有数据时，该列显示空即可
     rankOptionsFor(level) {
