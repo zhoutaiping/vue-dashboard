@@ -42,7 +42,7 @@ export function queryProjectOverview(data) {
 
 // 地区排名（全国）：POST /largeScreen/queryNationalRanking
 // 入参 { industry, startMonth, endMonth, rankingType, status }
-//   - rankingType: projectCount·项目个数, rate·达标率, capacity·装机容量, hour·利用小时数
+//   - rankingType: projectCount·项目个数, rate·达标率, capacity·装机容量, wind·风电利用小时数, pv·光伏利用小时数
 // 返回 data: [{ nameType(省份/电站名称), value }]
 export function queryNationalRanking(data) {
   return postRequest('/largeScreen/queryNationalRanking', data)
@@ -50,6 +50,7 @@ export function queryNationalRanking(data) {
 
 // 地区排名（省内）：POST /largeScreen/queryRegionRanking
 // 入参 { industry, startMonth, endMonth, provinceName, rankingType, status }
+//   - rankingType: rate·达标率, capacity·装机容量, wind·风电利用小时数, pv·光伏利用小时数
 // 返回 data: [{ nameType(市/区县名称), value }]
 export function queryRegionRanking(data) {
   return postRequest('/largeScreen/queryRegionRanking', data)

@@ -358,7 +358,7 @@ export default {
       }
     },
     // 地区排名接口入参：全国 queryNationalRanking / 省内 queryRegionRanking 共用
-    // rankingType 对应接口枚举（projectCount/rate/capacity/hour），随排名 tabs 切换
+    // rankingType 对应接口枚举（projectCount/rate/capacity/wind/pv），随排名 tabs 切换
     rankParams() {
       return Object.assign({}, this.reportParams, {
         rankingType: this.query.rankType

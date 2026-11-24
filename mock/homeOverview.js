@@ -53,7 +53,8 @@ const RANK_BASE = {
   projectCount: { base: 260, min: 0.02 },
   rate: { base: 100, min: 0.6 },
   capacity: { base: 2000, min: 0.02 },
-  hour: { base: 3200, min: 0.3 }
+  wind: { base: 3200, min: 0.3 },
+  pv: { base: 2800, min: 0.3 }
 }
 
 function randomInt(min, max, seed) {

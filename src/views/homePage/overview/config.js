@@ -52,14 +52,16 @@ export const RANK_TYPES = [
   { label: '项目个数', value: 'projectCount', unit: '个' },
   { label: '达标率', value: 'rate', unit: '%' },
   { label: '装机容量', value: 'capacity', unit: 'MW' },
-  { label: '利用小时数', value: 'hour', unit: 'h' }
+  { label: '风电利用小时数', value: 'wind', unit: 'h' },
+  { label: '光伏利用小时数', value: 'pv', unit: 'h' }
 ]
 
 // 省内排名维度：无「项目个数」
 export const REGION_RANK_TYPES = [
   { label: '达标率', value: 'rate', unit: '%' },
   { label: '装机容量', value: 'capacity', unit: 'MW' },
-  { label: '利用小时数', value: 'hour', unit: 'h' }
+  { label: '风电利用小时数', value: 'wind', unit: 'h' },
+  { label: '光伏利用小时数', value: 'pv', unit: 'h' }
 ]
 
 export const RANK_FIELD_MAP = { name: 'name', value: 'value', code: 'code' }
