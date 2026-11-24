@@ -226,11 +226,11 @@ export const BUILD_FILTERS = [
 
 export const SUBSIDY_FILTERS = ['无补贴', '已补贴']
 
-// fields 为候选字段，按序取第一个有效值
+// 展示字段按 /largeScreen/mapDisplay/price 接口文档取值，不设候选兜底
 export const PRICE_OPTIONS = [
-  { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'] },
-  { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'] },
-  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice', 'benchmarkPrice1'] }
+  { id: 'wind', label: '风电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice'] },
+  { id: 'pv', label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice'] },
+  { id: 'benchmark', label: '标杆电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'] }
 ]
 
 export function pickPriceValue(obj, fields) {
@@ -245,18 +245,13 @@ export function pickPriceValue(obj, fields) {
   return null
 }
 
+// 电价接口响应字段，按接口文档取值，不兼容未定义的字段
 export const PRICE_DTO_FIELDS = [
-  'avgSettlementPrice',
-  'avgWindSettlementPrice',
   'avgPvSettlementPrice',
-  'pvSettlementPrice',
-  'windSettlementPrice',
+  'avgWindSettlementPrice',
   'benchmarkPrice',
-  'spotWindSettlementPrice',
-  'spotPvSettlementPrice',
-  'avgWindSettlementPrice1',
-  'avgPvSettlementPrice1',
-  'benchmarkPrice1'
+  'pvSettlementPrice',
+  'windSettlementPrice'
 ]
 
 export function pickPriceFields(source) {
@@ -275,11 +270,11 @@ export function pickPriceFields(source) {
   return out
 }
 
-// 差值 = 电价 - 标杆电价；区域接口不返回 spot 均价，统一以 benchmarkPrice 为基准；>0 绿↓，<0 红↑
+// 悬浮展示与差值计算字段均按接口文档取值：电价取平均结算电价，差值基准取标杆电价；>0 绿↓，<0 红↑
 export const REGION_PRICE_COMPARE = [
-  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice', 'pvSettlementPrice', 'avgPvSettlementPrice1'], diffFields: ['benchmarkPrice', 'benchmarkPrice1'] },
-  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice', 'windSettlementPrice', 'avgWindSettlementPrice1'], diffFields: ['benchmarkPrice', 'benchmarkPrice1'] },
-  { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice', 'benchmarkPrice1'], nationalOnly: true, noDiff: true }
+  { label: '光伏结算电价', field: 'avgPvSettlementPrice', fields: ['avgPvSettlementPrice'], diffFields: ['benchmarkPrice'] },
+  { label: '发电结算电价', field: 'avgWindSettlementPrice', fields: ['avgWindSettlementPrice'], diffFields: ['benchmarkPrice'] },
+  { label: '标杆结算电价', field: 'benchmarkPrice', fields: ['benchmarkPrice'], nationalOnly: true, noDiff: true }
 ]
 
 // 数据起始月份
