@@ -277,13 +277,21 @@ export default {
           : (diff < 0 ? POINT_PRICE_COMPARE.downColor : POINT_PRICE_COMPARE.flatColor)
       }
       const sube = p.subelePrice || p.subsidyPrice || raw.subsidyPrice
-      return [
+      const status = p.status === undefined || p.status === null || p.status === '' ? raw.status : p.status
+      // 在建项目（status=1）不展示发电利用小时数、结算电价、补贴电价
+      const isBuilding = String(status) === '1' || status === '在建'
+      const rows = [
         { label: '实控人', value: fmt(p.actualController || raw.controller) },
-        { label: '装机容量', value: `${fmt(capacity)}kW` },
-        { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: rate === null ? '' : `（达标率：${rate}%）` },
-        { label: '结算电价', value: `${fmt(settle)}元/kWh`, sub: settleSub, subColor: settleSubColor },
-        { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
+        { label: '装机容量', value: `${fmt(capacity)}kW` }
       ]
+      if (!isBuilding) {
+        rows.push(
+          { label: '发电利用小时数', value: `${fmt(hours)}h`, sub: rate === null ? '' : `（达标率：${rate}%）` },
+          { label: '结算电价', value: `${fmt(settle)}元/kWh`, sub: settleSub, subColor: settleSubColor },
+          { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
+        )
+      }
+      return rows
     }
   },
   watch: {
