@@ -687,7 +687,9 @@ export default {
             // 区域悬浮：省份/区县均固定展示风电、光伏、标杆三行，含专属图标与括号差值
             if (params.seriesType === 'map' || params.componentType === 'geo') {
               const data = this.findRegionTooltipData(params.name)
-              const rows = REGION_PRICE_COMPARE.map(item => {
+              // 下钻后价格菜单已去掉标杆电价，浮层同步只展示当前层级可见的电价
+              const visibleIds = (this.priceOptions || []).map(o => o.id)
+              const rows = REGION_PRICE_COMPARE.filter(item => visibleIds.includes(item.id)).map(item => {
                 const active = item.id === this.priceType
                 const rowStyle = active
                   ? 'color:#fff;font-weight:700;'
