@@ -373,24 +373,11 @@ export default {
     }
   },
   methods: {
-    // 地图区域名 → tooltip 数据：GeoJSON 的省级名是短名（贵州），市级名带后缀（贵阳市），
-    // 而接口分组名可能写全称/短名两种口径；按原名、去后缀、补后缀逐级匹配，避免 tooltip 取不到数据
+    // 地图区域名 → tooltip 数据：provincePriceMap 已按地图区域名归一化，直接取同名数据
     findRegionTooltipData(name) {
       const source = this.regionTooltipData || {}
       const raw = String(name || '').trim()
-      if (!raw) return null
-      if (source[raw]) return source[raw]
-      const stripped = raw.replace(/(省|市|自治区|特别行政区|地区|盟|自治州)$/, '')
-      if (stripped && stripped !== raw) {
-        if (source[stripped]) return source[stripped]
-        const withCity = `${stripped}市`
-        if (source[withCity]) return source[withCity]
-      }
-      const withSuffix = Object.keys(source).find(key => {
-        const keyStripped = String(key || '').trim().replace(/(省|市|自治区|特别行政区|地区|盟|自治州)$/, '')
-        return keyStripped === stripped || keyStripped === raw
-      })
-      return withSuffix ? source[withSuffix] : null
+      return raw ? (source[raw] || null) : null
     },
     // 左右侧让位宽度（px）= 容器宽 × 浮层占比 + 间距，与 CSS 的 --map-side-inset 同口径：
     calcSideInset() {
@@ -701,27 +688,34 @@ export default {
             if (params.seriesType === 'map' || params.componentType === 'geo') {
               const data = this.findRegionTooltipData(params.name)
               const rows = REGION_PRICE_COMPARE.map(item => {
+                const active = item.id === this.priceType
+                const rowStyle = active
+                  ? 'color:#fff;font-weight:700;'
+                  : 'color:rgba(255,255,255,0.55);font-weight:400;'
+                const diffStyle = color => active ? `color:${color};margin-left:6px;` : 'color:inherit;margin-left:6px;'
                 const v = data ? pickPriceValue(data, item.fields || item.field) : null
                 const hasV = v !== null
                 const iconSrc = REGION_PRICE_ICONS[item.id]
                 const icon = iconSrc
-                  ? `<img src="${iconSrc}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
+                  ? `<img src="${iconSrc}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;opacity:${active ? 1 : 0.55};">`
                   : ''
-                const priceHtml = `${icon}${item.label}：<b>${hasV ? v : ' '}</b>`
-                const diffNone = ' '
-                if (item.noDiff) return priceHtml
-                const benchmark = data ? pickPriceValue(data, item.diffFields || item.diffField) : null
-                const vn = Number(v)
-                const bn = Number(benchmark)
-                if (!hasV || benchmark === null || isNaN(vn) || isNaN(bn)) return `${priceHtml}${diffNone}`
-                const diff = Math.round((vn - bn) * 100) / 100
-                if (diff > 0) {
-                  return `${priceHtml}<span style="color:#2fc25b;margin-left:6px;">（${Math.abs(diff).toFixed(2)}↓）</span>`
+                let content = `${icon}${item.label}：${hasV ? v : '--'}`
+                if (!item.noDiff) {
+                  const benchmark = data ? pickPriceValue(data, item.diffFields || item.diffField) : null
+                  const vn = Number(v)
+                  const bn = Number(benchmark)
+                  if (hasV && benchmark !== null && !isNaN(vn) && !isNaN(bn)) {
+                    const diff = Math.round((vn - bn) * 100) / 100
+                    if (diff > 0) {
+                      content += `<span style="${diffStyle('#2fc25b')}">（${Math.abs(diff).toFixed(2)}↓）</span>`
+                    } else if (diff < 0) {
+                      content += `<span style="${diffStyle('#f56c6c')}">（${Math.abs(diff).toFixed(2)}↑）</span>`
+                    } else {
+                      content += `<span style="${diffStyle('#909399')}">（0.00）</span>`
+                    }
+                  }
                 }
-                if (diff < 0) {
-                  return `${priceHtml}<span style="color:#f56c6c;margin-left:6px;">（${Math.abs(diff).toFixed(2)}↑）</span>`
-                }
-                return `${priceHtml}<span style="color:#909399;margin-left:6px;">（0.00）</span>`
+                return `<span style="${rowStyle}">${content}</span>`
               }).join('<br/>')
               // 拆分省份（内蒙古/河北）下钻：浮层先展示业务区域名（蒙西/蒙东、冀北/河北南网）
               const regionHead = data && data._regionName
@@ -887,7 +881,7 @@ export default {
       this._fitting = false
     },
     wrapTooltip(html) {
-      return `<div style="background: rgba(23, 35, 54, 0.9); color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12px; line-height: 1.6; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); white-space: nowrap;">${html}</div>`
+      return `<div style="background: rgba(23, 35, 54, 0.72); color: #fff; padding: 5px 12px; border-radius: 14px; font-size: 12px; line-height: 1.6; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); white-space: nowrap;">${html}</div>`
     },
     handleClick(params) {
       if (params.seriesType === 'scatter') {

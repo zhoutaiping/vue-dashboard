@@ -943,36 +943,18 @@ export default {
       this.priceGroups = this.normalizePriceGroups(data)
     },
     // _short 是地图上的区域名（省短名或业务区域名），与 resolveGroupName 的口径一致，用于二次索引
+    // 电价接口固定返回「省名/区域名 → 电价 DTO」的平铺 Map，不做其它结构兼容
     normalizePriceGroups(data) {
       const list = []
-      const add = (key, value) => {
-        const fields = pickPriceFields(value)
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return list
+      Object.keys(data).forEach(key => {
+        const fields = pickPriceFields(data[key])
         if (!fields) return
-        const name = String(key || '')
+        const name = String(key || '').trim()
         if (!name) return
         const short = provinceShortName(name)
         list.push({ name, _short: normalizeRegionName(short) || short, fields })
-      }
-      let payload = data
-      for (let i = 0; i < 3; i += 1) {
-        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) break
-        const keys = Object.keys(payload)
-        const wrapped = keys.filter(key => /^additionalProperties\d*$/.test(key))
-        if (wrapped.length !== 1 || keys.length !== 1) break
-        payload = payload[wrapped[0]]
-      }
-      if (Array.isArray(payload)) {
-        payload.forEach(item => add(item.name || item.provinceName || item.cityName, item))
-        return list
-      }
-      if (payload && typeof payload === 'object') {
-        // 单条电价（下钻后后端只回一条当前省/区域汇总）：挂到当前省份名下，不参与地市着色
-        if (pickPriceFields(payload)) {
-          add(this.currentProvinceShort, payload)
-          return list
-        }
-        Object.keys(payload).forEach(key => add(key, payload[key]))
-      }
+      })
       return list
     },
     // 把电价接口的字段合并到分组/地市数据上（不覆盖 name、projectList 等非电价字段）；

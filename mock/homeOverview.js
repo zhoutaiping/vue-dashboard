@@ -66,7 +66,7 @@ function randomInt(min, max, seed) {
 // 结构与前端 REGION_SPLIT 一致（对象含 name），避免字符串取 .name 得 undefined
 const PROVINCE_SPLIT = {
   内蒙古: [{ name: '蒙西' }, { name: '蒙东' }],
-  河北: [{ name: '冀北' }, { name: '冀南' }]
+  河北: [{ name: '冀北' }, { name: '河北南网' }]
 }
 
 // 拆分区域的「区域名 → 地市」映射（与前端 config REGION_SPLIT 完全一致）
@@ -82,10 +82,15 @@ const SPLIT_REGIONS = {
   ]
 }
 
-// 区域名（含别名后缀，如「蒙西电网」）→ { province, name, cities }
+// 区域名（含历史别名，如「蒙西电网」）→ { province, name, cities }
 // 只做「入参包含区域名」的匹配，不做反向包含：否则入参「河北」会误命中「河北南网」
-function findSplitRegion(name) {
+const REGION_ALIAS = { 冀南: '河北南网', 河北南: '河北南网', 蒙西电网: '蒙西', 蒙东电网: '蒙东' }
+function normalizeRegionKey(name) {
   const key = String(name || '').replace(/(省|市|自治区)/g, '')
+  return REGION_ALIAS[key] || key
+}
+function findSplitRegion(name) {
+  const key = normalizeRegionKey(name)
   if (!key) return null
   const provinces = Object.keys(SPLIT_REGIONS)
   for (let i = 0; i < provinces.length; i++) {
@@ -352,6 +357,16 @@ module.exports = [
       const rankingType = body.rankingType || 'projectCount'
       // provinceName 兼容全称/短名
       const short = String(body.provinceName || '北京').replace(/(省|市|自治区)$/, '')
+
+      // 已下钻到具体拆分区域：返回该区域真实地市排名，而不是拼出「河北南网东市」这类假地市
+      const regionHit = findSplitRegion(body.provinceName)
+      if (regionHit) {
+        return ok(buildRankItems(
+          regionHit.cities.map(c => `${c}市`),
+          rankingType,
+          27
+        ))
+      }
 
       // 拆分省份：返回拆分区域排名（蒙西/蒙东、冀北/河北南网）
       const split = PROVINCE_SPLIT[short]

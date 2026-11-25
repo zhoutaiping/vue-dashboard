@@ -245,13 +245,7 @@ export function pickPriceFields(source) {
     const val = source[key]
     if (val !== undefined && val !== null && val !== '') out[key] = val
   })
-
-  if (!Object.keys(out).length) {
-    const wrapped = Object.keys(source).filter(key => /^additionalProperties\d*$/.test(key))
-    if (wrapped.length === 1) return pickPriceFields(source[wrapped[0]])
-    return null
-  }
-  return out
+  return Object.keys(out).length ? out : null
 }
 
 // 展示字段按接口实际有值口径取：风电/光伏结算电价对应 windSettlementPrice / pvSettlementPrice
@@ -408,6 +402,9 @@ export const DRILL_REGION_AS_PROVINCE_NAME = true
 export function provinceShortName(fullName) {
   const name = String(fullName || '').trim()
   if (!name) return ''
+  // 拆分区域名不能被前缀匹配截成省名（河北南网 → 河北），否则电价/浮层会落到整省分组
+  const region = normalizeRegionName(name)
+  if (region) return region
   const hit = PROVINCE_LIST.find(p => p.full === name)
   if (hit) return hit.name
   const prefix = PROVINCE_LIST.find(p => name.indexOf(p.full) === 0 || name.indexOf(p.name) === 0)
