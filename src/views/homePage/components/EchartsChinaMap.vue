@@ -266,11 +266,12 @@ export default {
       const p = detail.powerGenerationDetail || {}
       const capacity = p.capacity !== undefined ? p.capacity : (p.installCapacity !== undefined ? p.installCapacity : raw.capacity)
       const hours = p.hours !== undefined ? p.hours : (p.powerGenerationHours !== undefined ? p.powerGenerationHours : raw.hours)
-      // 达标率：接口字段为 radio，不兼容旧 rate / yield 字段。
+      // 达标率：接口 radio 为小数（如 0.7050），展示时 *100 转为百分比；
       // 仅当 radio 有值时展示；详情缺失时回退点位原始数据的同名字段
       const pickRadio = obj => (obj && obj.radio !== undefined && obj.radio !== null && obj.radio !== '' ? obj.radio : null)
       const detailRadio = pickRadio(p)
-      const rate = detailRadio === null ? pickRadio(raw) : detailRadio
+      const radio = detailRadio === null ? pickRadio(raw) : detailRadio
+      const rate = radio === null ? null : (isNaN(Number(radio)) ? null : (Number(radio) * 100).toFixed(2))
       // 结算电价优先取详情（兼容历史 editWindPrice），详情无值时回退点位数据
       const settleRaw = pickPriceValue(p, POINT_PRICE_COMPARE.priceFields)
       const settle = settleRaw === null ? pickPriceValue(raw, [POINT_TIP.valueField]) : settleRaw
