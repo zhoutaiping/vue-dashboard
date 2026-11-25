@@ -4,7 +4,7 @@
       v-for="item in normalizedItems"
       :key="item.value"
       class="category-tabs__item"
-      :class="{ 'is-active': isActive(item) && !isMuted(item), 'is-muted': isMuted(item) }"
+      :class="{ 'is-active': isActive(item) }"
       :style="activeStyle(item)"
       @click="handleClick(item)"
     >
@@ -17,7 +17,7 @@
 </template>
 
 <script>
-/** 通用分类 Tab（纯展示，支持单选/多选及“全部”联动） */
+/** 通用分类 Tab（纯展示，支持单选/多选；“全部”只负责全选，不可取消全选） */
 export default {
   name: 'CategoryTabs',
   props: {
@@ -55,11 +55,6 @@ export default {
       if (!this.multiple) return item.value === this.value
       return item.value === this.allValue ? this.isAllSelected : this.selectedList.includes(item.value)
     },
-    // 仅“全部”在未全选时置灰
-    isMuted(item) {
-      if (!this.multiple) return false
-      return item.value === this.allValue && !this.isAllSelected
-    },
     handleClick(item) {
       if (!this.multiple) {
         if (item.value === this.value) return
@@ -67,11 +62,17 @@ export default {
         this.$emit('change', item.value, item.raw)
         return
       }
-      // “全部”在全选/全不选间切换；允许取消到最后一项
       let next
       if (item.value === this.allValue) {
-        next = this.isAllSelected ? [] : this.realItems.map(i => i.value)
+        // 全选时「全部」高亮但点击无效；未全选时只负责全选
+        if (this.isAllSelected) return
+        next = this.realItems.map(i => i.value)
+      } else if (this.isAllSelected) {
+        // 全选状态下点击某个行业：只保留该行业
+        next = [item.value]
       } else if (this.selectedList.includes(item.value)) {
+        // 不允许全不选：最后一项已选行业不可取消
+        if (this.selectedList.length === 1) return
         next = this.selectedList.filter(v => v !== item.value)
       } else {
         next = this.selectedList.concat(item.value)
@@ -80,7 +81,7 @@ export default {
       this.$emit('change', next, item.raw)
     },
     activeStyle(item) {
-      if (!this.isActive(item) || this.isMuted(item)) return {}
+      if (!this.isActive(item)) return {}
       return {
         background: this.activeColor,
         borderColor: this.activeColor,
@@ -114,15 +115,6 @@ export default {
     &.is-active:hover {
       color: #fff;
       background-color: rgba(0,136,255,1);
-    }
-
-    &.is-muted {
-      background-color: rgba(96,105,127,0.7);
-      color: rgba(255,255,255,1);
-
-      &:hover {
-        color: rgba(255,255,255,1);
-      }
     }
   }
 

@@ -998,11 +998,16 @@ export default {
       return []
     },
     // 行业多选变更：选中全部真实分类时规范化为空数组（= 全部，industry 传空）；
+    // 交互不允许全不选，空数组统一按全选处理
     handleCategoryChange(next) {
       const list = Array.isArray(next) ? next : []
+      if (!list.length) {
+        this.setCategories([])
+        return
+      }
       const realIds = (this.categoryTabs || []).filter(t => t.id !== 'all').map(t => t.id)
       const isAll = realIds.length > 0 && realIds.every(id => list.includes(id))
-      this.setCategories(isAll ? [] : list, !list.length)
+      this.setCategories(isAll ? [] : list)
     },
     // none：是否为「全不选」空态 —— query.categories 为空数组时既可能是全选
     // （industry 传空取全量）也可能是全不选，二者必须靠该参数区分

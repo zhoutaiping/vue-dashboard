@@ -113,7 +113,15 @@ import * as provinceMapLoaders from '@/assets/maps'
 import resize from '@/components/Charts/mixins/resize'
 import { REGION_PRICE_COMPARE, POINT_PRICE_COMPARE, POINT_TIP, pointCategory, classifyProjectColor, PROJECT_DETAIL_TEXT, pickPriceValue } from '../overview/config'
 import { patchZoomPointer } from '../pointer'
-import priceIcon from '../price.png'
+import windPriceIcon from '../windSettlementPrice.svg'
+import pvPriceIcon from '../pvSettlementPrice.svg'
+import benchmarkPriceIcon from '../benchmarkPrice.svg'
+
+const REGION_PRICE_ICONS = {
+  wind: windPriceIcon,
+  pv: pvPriceIcon,
+  benchmark: benchmarkPriceIcon
+}
 
 echarts.registerMap('china', chinaJson)
 
@@ -687,40 +695,32 @@ export default {
           padding: 0,
           extraCssText: 'box-shadow: none;',
           formatter: params => {
-            // 区域悬浮（交互8）：电价 + 与标杆电价的差值
-            // 全国含标杆结算电价三行；下钻到省（市区粒度）仅光伏/发电两行
+            // 区域悬浮：省份/区县均固定展示风电、光伏、标杆三行，含专属图标与括号差值
             if (params.seriesType === 'map' || params.componentType === 'geo') {
               const data = this.findRegionTooltipData(params.name)
-              const selected = this.priceOptions.find(o => o.id === this.priceType)
-              const base = REGION_PRICE_COMPARE.filter(item => !this.mapCode || !item.nationalOnly)
-              const list = selected ? base.filter(item => item.field === selected.field) : base
-              // 选中项在当前层级不可展示（如标杆电价下钻到省）时回退为全部，避免出现空浮层
-              const rows = (list.length ? list : base)
-                .map(item => {
-                  // 取值兼容：avgXxx 为 null 时回退 xxx 字段，字符串数值（"0.4155"）可解析
-                  const v = data ? pickPriceValue(data, item.fields || item.field) : null
-                  const hasV = v !== null
-                  const icon = `<img src="${priceIcon}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
-                  const priceHtml = `${icon}<b>${hasV ? v : '--'}</b>`
-                  if (item.noDiff) return priceHtml
-                  const benchmark = data ? pickPriceValue(data, item.diffFields || item.diffField) : null
-                  const hasBenchmark = benchmark !== null
-                  const vn = Number(v)
-                  const bn = Number(benchmark)
-                  // 标杆电价缺失（pickPriceValue 已把 "" 归一为 null）时无法计算，只显示电价
-                  if (!hasV || !hasBenchmark || isNaN(vn) || isNaN(bn)) return priceHtml
-                  const diff = Math.round((vn - bn) * 100) / 100
-                  let diffHtml
-                  if (diff > 0) {
-                    diffHtml = `<span style="color:#2fc25b;">${Math.abs(diff).toFixed(2)}↓</span>`
-                  } else if (diff < 0) {
-                    diffHtml = `<span style="color:#f56c6c;">${Math.abs(diff).toFixed(2)}↑</span>`
-                  } else {
-                    diffHtml = '<span style="color:#909399;">0.00</span>'
-                  }
-                  return `${priceHtml}（${diffHtml}）`
-                })
-                .join('<br/>')
+              const rows = REGION_PRICE_COMPARE.map(item => {
+                const v = data ? pickPriceValue(data, item.fields || item.field) : null
+                const hasV = v !== null
+                const iconSrc = REGION_PRICE_ICONS[item.id]
+                const icon = iconSrc
+                  ? `<img src="${iconSrc}" style="width:14px;height:14px;vertical-align:-3px;margin-right:4px;">`
+                  : ''
+                const priceHtml = `${icon}${item.label}：<b>${hasV ? v : ' '}</b>`
+                const diffNone = ' '
+                if (item.noDiff) return priceHtml
+                const benchmark = data ? pickPriceValue(data, item.diffFields || item.diffField) : null
+                const vn = Number(v)
+                const bn = Number(benchmark)
+                if (!hasV || benchmark === null || isNaN(vn) || isNaN(bn)) return `${priceHtml}${diffNone}`
+                const diff = Math.round((vn - bn) * 100) / 100
+                if (diff > 0) {
+                  return `${priceHtml}<span style="color:#2fc25b;margin-left:6px;">（${Math.abs(diff).toFixed(2)}↓）</span>`
+                }
+                if (diff < 0) {
+                  return `${priceHtml}<span style="color:#f56c6c;margin-left:6px;">（${Math.abs(diff).toFixed(2)}↑）</span>`
+                }
+                return `${priceHtml}<span style="color:#909399;margin-left:6px;">（0.00）</span>`
+              }).join('<br/>')
               // 拆分省份（内蒙古/河北）下钻：浮层先展示业务区域名（蒙西/蒙东、冀北/河北南网）
               const regionHead = data && data._regionName
                 ? `<div style="font-size:12px;opacity:.85;margin-bottom:2px;">${data._regionName}</div>`
