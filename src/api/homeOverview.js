@@ -114,10 +114,12 @@ export function getProjectList(params) {
 // 返回 data:
 //   - projectType: POWER-发电项目, NON_STANDARD-非标项目（两类项目展示字段不同）
 //   - powerGenerationDetail（POWER）: { projectName, projectCode, actualController, capacity 装机容量,
-//       hours 发电利用小时数, radio 达标率, settlementPrice 结算电价(兼容 editWindPrice),
+//       hours 发电利用小时数, radio 达标率, finishTime 投产时间(yyyy-MM-dd),
+//       settlementPrice 结算电价(兼容 editWindPrice),
 //       spotSettlementPrice Spot结算电价(按项目类型返回风电/光伏电价), subelePrice 补贴电价 }
 //   - nonStandardDetail（NON_STANDARD）: { projectName, projectCode, actualController, accessMethod 接入方式,
-//       productionTypes 生产及预警, productionCapacity 项目规模, platformTransfer 是否平台转发 }
+//       productionTypes 生产及预警, productionCapacity 项目规模, platformTransfer 是否平台转发,
+//       finishTime 投产时间(yyyy-MM-dd) }
 export function queryProjectDetail(data) {
   return postRequest('/largeScreen/projectDetail', data)
 }

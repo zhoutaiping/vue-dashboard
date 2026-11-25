@@ -259,7 +259,8 @@ export default {
           { label: '接入方式', value: enumText(PROJECT_DETAIL_TEXT.accessMethod, n.accessMethod) },
           { label: '生产及预警', value: enumText(PROJECT_DETAIL_TEXT.productionTypes, n.productionTypes) },
           { label: '项目规模', value: fmt(n.productionCapacity) },
-          { label: '是否平台转发', value: hasTransfer ? enumText(PROJECT_DETAIL_TEXT.platformTransfer, n.platformTransfer) : PROJECT_DETAIL_TEXT.platformTransfer.none }
+          { label: '是否平台转发', value: hasTransfer ? enumText(PROJECT_DETAIL_TEXT.platformTransfer, n.platformTransfer) : PROJECT_DETAIL_TEXT.platformTransfer.none },
+          { label: '投产时间', value: fmt(n.finishTime || raw.finishTime) }
         ]
       }
       const p = detail.powerGenerationDetail || {}
@@ -299,6 +300,7 @@ export default {
           { label: '补贴电价', value: `${fmt(sube)}元/kWh` }
         )
       }
+      rows.push({ label: '投产时间', value: fmt(p.finishTime || raw.finishTime) })
       return rows
     }
   },

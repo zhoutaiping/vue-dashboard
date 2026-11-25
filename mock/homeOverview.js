@@ -481,6 +481,7 @@ module.exports = [
       const tail3 = tail + 3
       const tail4 = tail + 4
       const tail5 = tail + 5
+      const finishTime = `${2016 + tail % 8}-${String(tail % 12 + 1).padStart(2, '0')}-${String(tail % 28 + 1).padStart(2, '0')}`
       if (tail % 2 === 1) {
         // 非标项目（字段与真实接口一致：accessMethod/productionTypes/productionCapacity/platformTransfer）
         return ok({
@@ -494,6 +495,7 @@ module.exports = [
             productionTypes: String(tail1 % 3), // 生产及预警：0正常运行 1顺歌运行 2预警运行
             productionCapacity: String(randomInt(6, 30, tail2)), // 项目规模
             platformTransfer: tail3 % 2 === 0 ? '1' : '2', // 是否平台转发：1是 2否
+            finishTime, // 投产时间
             status: '1' // 项目状态：1、在建；2、运营
           },
           powerGenerationDetail: null
@@ -513,6 +515,7 @@ module.exports = [
           editWindPrice: String(randomInt(1000, 6000, tail5) / 10000), // 结算电价（4 位小数，便于演示差值）
           spotSettlementPrice: String(randomInt(1000, 6000, tail5 + 9) / 10000), // Spot结算电价
           subePrice: String(randomInt(5, 30, tail1) / 100),
+          finishTime, // 投产时间
           status: tail % 3 === 0 ? '1' : '2' // 项目状态：1、在建；2、运营（偶数项目 2/3 概率运营）
         }
       })
