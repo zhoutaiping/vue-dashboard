@@ -37,9 +37,14 @@ function jumpTo(msg = noteMsg.noPermission, path) {
   })
 }
 // 导航守卫里 replace 重定向 / 登录并发 push 会产生这类竞争错误，都是无害的
+// vue-router 3.5+ 的这类错误未必带 name，只有 _isRouter 标记或固定文案，这里一并识别
 function isIgnorableNavError(error) {
   if (!error) return false
-  return ['NavigationCancelled', 'NavigationDuplicated', 'NavigationRedundant', 'NavigationRedirected'].indexOf(error.name) > -1
+  const names = ['NavigationCancelled', 'NavigationDuplicated', 'NavigationRedundant', 'NavigationRedirected']
+  if (names.indexOf(error.name) > -1) return true
+  if (error._isRouter === true) return true
+  return /navigation aborted|redirected when going|avoided redundant navigation|navigation cancelled/i
+    .test(String(error.message || ''))
 }
 
 function createDone(next) {
@@ -67,6 +72,23 @@ function createDone(next) {
 window.addEventListener('unhandledrejection', event => {
   if (isIgnorableNavError(event && event.reason)) event.preventDefault()
 })
+
+// 登录页的 router.push 多数没接 catch，守卫里的 abort/redirect 会冒出 Uncaught (in promise)
+// 在路由方法上统一兜底，promise 原样返回，不影响调用方 then
+function withNavFailureGuard(method) {
+  const original = router[method].bind(router)
+  router[method] = (...args) => {
+    const result = original(...args)
+    if (result && typeof result.catch === 'function') {
+      result.catch(error => {
+        if (!isIgnorableNavError(error)) console.error(error)
+      })
+    }
+    return result
+  }
+}
+withNavFailureGuard('push')
+withNavFailureGuard('replace')
 
 if (localStorage.getItem('reloadCount') == null) {
   localStorage.setItem('reloadCount', 0)
