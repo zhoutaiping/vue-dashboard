@@ -73,6 +73,7 @@ export function filterHiddenMenus(tree) {
 
 // 给可访问的页面菜单补 Vue Router meta
 // 条件：meantype === 'menu' 且 menuCode、url 都不为空；目录等节点不写 meta
+// cache 按 cacheFlag 取值：0 为 true，其余（含 1 / 缺失）为 false
 // 入口先过滤 sidebarShow=1：即使迁移时只带这个格式化函数，隐藏菜单也不会漏进结果
 export function withMenuMeta(tree) {
   const visible = filterHiddenMenus(tree)
@@ -90,7 +91,8 @@ export function withMenuMeta(tree) {
         next.meta = Object.assign({}, node.meta, {
           title: name,
           firstLevelMenu: rootName,
-          tracker: true
+          tracker: true,
+          cache: Number(node.cacheFlag) === 0
         })
       }
       return next

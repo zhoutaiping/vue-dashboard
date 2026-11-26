@@ -27,6 +27,7 @@ const rawTree = [
         meantype: 'menu',
         menuCode: '/system/menuManage',
         url: '@/view/menuManage/index.vue',
+        cacheFlag: 0,
         children: [
           { id: 3, code: 'RAA01:B1', name: '新增', meantype: 'button', menuCode: '', url: '', children: [] },
           { id: 4, code: 'RAA01:B2', name: '导出', meantype: 'button', menuCode: '', url: '', children: [] }
@@ -92,7 +93,8 @@ describe('页面菜单 meta', () => {
     expect(menus[0].children[0].meta).toEqual({
       title: '菜单管理',
       firstLevelMenu: '系统管理',
-      tracker: true
+      tracker: true,
+      cache: true
     })
   })
 
@@ -130,6 +132,7 @@ describe('页面菜单 meta', () => {
         meantype: 'menu',
         menuCode: '/homeOverview',
         url: '@/view/homePage/overview/index.vue',
+        cacheFlag: 1,
         children: []
       }]
     })
@@ -137,7 +140,8 @@ describe('页面菜单 meta', () => {
     expect(menus[0].meta).toEqual({
       title: '首页总览',
       firstLevelMenu: '首页总览',
-      tracker: true
+      tracker: true,
+      cache: false
     })
   })
 
@@ -148,6 +152,7 @@ describe('页面菜单 meta', () => {
       meantype: 'menu',
       menuCode: '/a',
       url: 'a.vue',
+      cacheFlag: '0',
       meta: { icon: 'chart' },
       children: []
     }]
@@ -157,8 +162,26 @@ describe('页面菜单 meta', () => {
       icon: 'chart',
       title: 'A',
       firstLevelMenu: 'A',
-      tracker: true
+      tracker: true,
+      cache: true
     })
+  })
+
+  it('meta.cache 按 cacheFlag 取值：0 为 true，其余值为 false', () => {
+    const makeTree = cacheFlag => [{
+      id: 1,
+      name: '页面',
+      meantype: 'menu',
+      menuCode: '/page',
+      url: 'page.vue',
+      cacheFlag,
+      children: []
+    }]
+    expect(withMenuMeta(makeTree(0))[0].meta.cache).toBe(true)
+    expect(withMenuMeta(makeTree('0'))[0].meta.cache).toBe(true)
+    expect(withMenuMeta(makeTree(1))[0].meta.cache).toBe(false)
+    expect(withMenuMeta(makeTree('1'))[0].meta.cache).toBe(false)
+    expect(withMenuMeta(makeTree(undefined))[0].meta.cache).toBe(false)
   })
 })
 
@@ -195,7 +218,7 @@ describe('左侧栏不显示的菜单过滤', () => {
       url: '',
       sidebarShow: 0,
       children: [
-        { id: 12, name: '可见页面', meantype: 'menu', menuCode: '/visible', url: 'views/visible.vue', children: [] },
+        { id: 12, name: '可见页面', meantype: 'menu', menuCode: '/visible', url: 'views/visible.vue', cacheFlag: 0, children: [] },
         {
           id: 13,
           name: '隐藏页面',
@@ -264,7 +287,8 @@ describe('左侧栏不显示的菜单过滤', () => {
     expect(menus[0].children[0].meta).toEqual({
       title: '可见页面',
       firstLevelMenu: '可见目录',
-      tracker: true
+      tracker: true,
+      cache: true
     })
   })
 
@@ -288,7 +312,8 @@ describe('左侧栏不显示的菜单过滤', () => {
     expect(result[0].children[0].meta).toEqual({
       title: '可见页面',
       firstLevelMenu: '可见目录',
-      tracker: true
+      tracker: true,
+      cache: true
     })
   })
 

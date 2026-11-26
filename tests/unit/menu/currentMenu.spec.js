@@ -91,7 +91,7 @@ describe('menu store', () => {
       meantype: 'menu',
       menuCode: '/system/menuManage',
       url: 'view/menuManage/index.vue',
-      meta: { title: '菜单管理', firstLevelMenu: '系统管理', tracker: true },
+      meta: { title: '菜单管理', firstLevelMenu: '系统管理', tracker: true, cache: false },
       children: []
     }]
   }]
@@ -121,7 +121,8 @@ describe('menu store', () => {
     expect(ctx.state.menus[0].children[0].meta).toEqual({
       title: '菜单管理',
       firstLevelMenu: '系统管理',
-      tracker: true
+      tracker: true,
+      cache: false
     })
     const walk = list => {
       list.forEach(node => {

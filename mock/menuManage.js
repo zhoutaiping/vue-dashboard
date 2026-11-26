@@ -218,8 +218,8 @@ function toDTO(node) {
     level0: Number(node.level0 || node.level) || 1,
     orderNum: Number(node.orderNum) || 0,
     // 0/1 标志位：历史数据缺省按 0（缓存 / 显示）处理
-    cacheFlag: node.cacheFlag === 1 ? 1 : 0,
-    // 真实接口可能下发字符串 '1'，统一按数值判定隐藏，避免 DTO 环节把隐藏标志抹成 0
+    // 真实接口可能下发字符串 '1'，统一按数值判定，避免 DTO 环节把标志抹成 0
+    cacheFlag: Number(node.cacheFlag) === 1 ? 1 : 0,
     sidebarShow: Number(node.sidebarShow) === 1 ? 1 : 0,
     apiPaths: Array.isArray(node.apiPaths) ? node.apiPaths.slice() : [],
     regular: Number(node.regular) === 0 ? 0 : 1,

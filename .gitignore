@@ -25,5 +25,7 @@ yarn.lock
 # WorkBuddy 本地修复用的 npm 缓存与脚本
 .npm-cache/
 
-# 本地改造备份文件，不编译、不提交
+# 本地改造参考文件：其余 *_dev.js 不编译、不提交；迁移用的两个副本需要入库
 *_dev.js
+!src/permission_dev.js
+!src/store/modules/menu_dev.js
