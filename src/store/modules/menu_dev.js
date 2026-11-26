@@ -21,12 +21,18 @@ function resolveViewComponent(url) {
   if (!path || path.split('/').some(segment => segment === '..')) return NotFound
   // 单个菜单的 url 指向不存在的组件时不能中断整棵动态路由：降级到 NotFound，
   // 其余菜单照常注册（webpack require.context 找不到模块会抛 Cannot find module）
-  try {
-    return _import(path) || NotFound
-  } catch (error) {
-    console.warn(`[menu] 组件不存在，已降级到默认页: ${path}`, error)
-    return NotFound
+  // 兼容后端把目录型组件写成 assets/xxx，实际文件是 assets/xxx/index.vue
+  const candidates = [path, path.replace(/\/+$/, '') + '/index']
+  for (let i = 0; i < candidates.length; i += 1) {
+    try {
+      const component = _import(candidates[i])
+      if (component) return component
+    } catch (error) {
+      // 继续尝试下一个候选路径
+    }
   }
+  console.warn(`[menu] 组件不存在，已降级到默认页: ${path}`)
+  return NotFound
 }
 
 function normalizeRoutePath(menuCode) {

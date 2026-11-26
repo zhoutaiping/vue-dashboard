@@ -39,7 +39,7 @@ function jumpTo(msg = noteMsg.noPermission, path) {
 // 导航守卫里 replace 重定向 / 登录并发 push 会产生这类竞争错误，都是无害的
 function isIgnorableNavError(error) {
   if (!error) return false
-  return ['NavigationCancelled', 'NavigationDuplicated', 'NavigationRedundant'].indexOf(error.name) > -1
+  return ['NavigationCancelled', 'NavigationDuplicated', 'NavigationRedundant', 'NavigationRedirected'].indexOf(error.name) > -1
 }
 
 function createDone(next) {
@@ -412,7 +412,10 @@ router.beforeEach(async(to, from, next) => {
       }
 
       if (addedNow) {
-        done({ ...to, replace: true })
+        // 动态路由注册后当前 to 用旧 matcher 解析，直接 next 会落到 404；
+        // 用 next(false) 取消当前导航，再在守卫外 replace，避免 vue-router 的 NavigationRedirected 未捕获异常
+        done(false)
+        router.replace(to.fullPath).catch(() => {})
         return
       }
       goRouter(to, from, done)
